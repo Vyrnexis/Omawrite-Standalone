@@ -368,7 +368,8 @@ ApplicationWindow {
         id: shortcutsDialog
         title: "Keyboard Shortcuts"
         standardButtons: Dialog.Close
-        anchors.centerIn: parent
+        x: Math.round((win.width - width) / 2)
+        y: Math.round((win.height - height) / 2)
         contentItem: Label {
             text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+P  Print\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
             lineHeight: 1.5
