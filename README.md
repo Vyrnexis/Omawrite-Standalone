@@ -28,17 +28,13 @@ This is a fork of the original Omawrite editor. The original project was built e
 ### Building from Source
 
 1. Clone the repository and navigate into the project directory.
-2. Generate the Makefile using Qt 6's qmake:
+2. Run the provided build script (which automatically detects `qmake` or `qmake6` and compiles the project into a `build/` directory):
    ```bash
-   qmake6 omawrite.pro # On some distributions, this command may just be `qmake`
+   ./bin/build
    ```
-3. Compile the application:
+3. Run the compiled binary:
    ```bash
-   make -j$(nproc)
-   ```
-4. Run the compiled binary:
-   ```bash
-   ./omawrite
+   ./build/omawrite
    ```
 
 ## Configuration
