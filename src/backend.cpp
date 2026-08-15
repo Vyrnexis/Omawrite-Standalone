@@ -206,6 +206,14 @@ void Backend::open(const QUrl &url) {
 
     const QString targetName = QFileInfo(url.toLocalFile()).fileName();
     QFile file(url.toLocalFile());
+
+    if (!file.exists()) {
+        setFileUrl(url);
+        loadDocumentText("");
+        setModified(false);
+        setStatus(QStringLiteral("New file %1").arg(targetName));
+        return;
+    }
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         setStatus(QStringLiteral("Could not open %1.").arg(targetName));
         return;
