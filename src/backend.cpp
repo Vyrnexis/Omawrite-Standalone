@@ -579,10 +579,16 @@ void Backend::loadOmarchyTheme() {
     m_themeAccent = m_darkMode ? QStringLiteral("#5584aa") : QStringLiteral("#2077b2");
     m_themeSelection = m_darkMode ? QStringLiteral("#186a9a") : QStringLiteral("#2077b2");
 
-    const QString colorsPath = QDir::homePath()
-        + QStringLiteral("/.local/state/omarchy/current/theme/colors.toml");
+    const QString configDir = QDir::homePath() + QStringLiteral("/.config/omawrite");
+    const QString configPath = configDir + QStringLiteral("/config.toml");
+    
+    // Ensure the config directory exists so the user can populate it
+    if (!QDir(configDir).exists()) {
+        QDir().mkpath(configDir);
+    }
+
     QString themeMode;
-    QFile file(colorsPath);
+    QFile file(configPath);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QTextStream in(&file);
         while (!in.atEnd()) {
@@ -598,19 +604,33 @@ void Backend::loadOmarchyTheme() {
             QString value = line.mid(equals + 1).trimmed();
             if (value.size() >= 2
                     && ((value.front() == QLatin1Char('"') && value.back() == QLatin1Char('"'))
-                        || (value.front() == QLatin1Char('\'') && value.back() == QLatin1Char('\''))))
+                        || (value.front() == QLatin1Char('\'') && value.back() == QLatin1Char('\'')))) {
                 value = value.mid(1, value.size() - 2);
+            }
 
-            if (key == QStringLiteral("mode"))
-                themeMode = value;
-            else if (key == QStringLiteral("background"))
+            if (key == QStringLiteral("background")) {
                 m_themeBackground = value;
-            else if (key == QStringLiteral("foreground"))
+            } else if (key == QStringLiteral("foreground")) {
                 m_themeForeground = value;
-            else if (key == QStringLiteral("accent"))
+            } else if (key == QStringLiteral("accent")) {
                 m_themeAccent = value;
-            else if (key == QStringLiteral("selection"))
+            } else if (key == QStringLiteral("selection")) {
                 m_themeSelection = value;
+            } else if (key == QStringLiteral("text_scale")) {
+                bool ok;
+                qreal scale = value.toDouble(&ok);
+                if (ok && scale > 0) {
+                    m_textScale = scale;
+                    emit textScaleChanged();
+                }
+            } else if (key == QStringLiteral("font_family")) {
+                if (m_fontFamily != value) {
+                    m_fontFamily = value;
+                    emit fontFamilyChanged();
+                }
+            } else if (key == QStringLiteral("mode")) {
+                themeMode = value;
+            }
         }
     }
 
@@ -649,17 +669,13 @@ void Backend::watchOmarchyTheme() {
     if (!watched.isEmpty())
         m_themeWatcher.removePaths(watched);
 
-    const QString currentDir = QDir::homePath()
-        + QStringLiteral("/.local/state/omarchy/current");
-    const QString themeDir = currentDir + QStringLiteral("/theme");
-    const QString colorsPath = themeDir + QStringLiteral("/colors.toml");
+    const QString configDir = QDir::homePath() + QStringLiteral("/.config/omawrite");
+    const QString configPath = configDir + QStringLiteral("/config.toml");
 
-    if (QDir(currentDir).exists())
-        m_themeWatcher.addPath(currentDir);
-    if (QDir(themeDir).exists())
-        m_themeWatcher.addPath(themeDir);
-    if (QFile::exists(colorsPath))
-        m_themeWatcher.addPath(colorsPath);
+    if (QDir(configDir).exists())
+        m_themeWatcher.addPath(configDir);
+    if (QFile::exists(configPath))
+        m_themeWatcher.addPath(configPath);
 }
 
 QUrl Backend::suggestedSaveUrl() const {

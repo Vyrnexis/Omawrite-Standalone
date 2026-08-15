@@ -1,41 +1,83 @@
-# Omawrite
+# Omawrite-Standalone
 
-A dead-simple Markdown writing app built with Qt Quick and C++ that automatically follows system dark/light mode.
+A minimal, distraction-free Markdown writing application built with Qt Quick and C++.
+
+This is a fork of the original Omawrite editor. The original project was built exclusively for the Omarchy desktop environment and relied on its D-Bus services for theming and configuration. This fork decouples the editor from those native desktop dependencies, allowing it to be compiled and run as a standalone application on any Linux distribution or any operating system that supports Qt 6.
 
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-24-08" src="https://github.com/user-attachments/assets/4e930c0d-edda-4046-b444-a59eff523329" />
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-23-23" src="https://github.com/user-attachments/assets/8ced7c26-961b-4ded-b263-84403001a951" />
 
+## Standalone Features & Enhancements
 
-## Install
+- **Distro-Independent:** Fully decoupled from Omarchy D-Bus scaling and theming services.
+- **Custom Configuration:** Supports live-reloading via a standard `~/.config/omawrite/config.toml` file.
+- **Custom Themes & Fonts:** Allows custom hex colors for background, foreground, accents, and selections, as well as custom font families.
+- **Distraction-Free UI:** Native OS title bars have been stripped away for a frameless writing experience.
+- **Dynamic Zooming HUD:** Zoom in and out dynamically using `Ctrl++` and `Ctrl+-`, with a transient heads-up display.
+- **Robust Syntax Highlighting:** Updated to properly render inline markdown formatting in Qt 6 RichText mode while retaining standard plain text behavior when saving to disk.
 
-Install via the Omarchy Package Repository via the `omawrite` package. It's installed by default in new installations of Omarchy (from Quattro forward).
+## Build and Install
+
+### Requirements
+
+- Qt 6 libraries: `qt6-base`, `qt6-declarative`, `qt6-quickcontrols2`
+- `qmake` (Qt 6)
+- A C++17 compatible compiler (e.g., `clang++` or `g++`)
+- `make`
+
+### Building from Source
+
+1. Clone the repository and navigate into the project directory.
+2. Generate the Makefile using Qt 6's qmake:
+   ```bash
+   qmake6 omawrite.pro # On some distributions, this command may just be `qmake`
+   ```
+3. Compile the application:
+   ```bash
+   make -j$(nproc)
+   ```
+4. Run the compiled binary:
+   ```bash
+   ./omawrite
+   ```
+
+## Configuration
+
+Upon the first run, the application will create a configuration file at `~/.config/omawrite/config.toml`. You can edit this file to customize the editor in real time without restarting:
+
+```toml
+# Omawrite Custom Theme & Configuration
+
+# Text scaling factor. 1.0 is default.
+text_scale = 1.0
+
+# Font family. The default is "iA Writer Mono S".
+# font_family = "iA Writer Mono S"
+
+# --- Tokyo Night Theme Example ---
+# background = "#1a1b26"
+# foreground = "#c0caf5"
+# accent = "#7aa2f7"
+# selection = "#33467C"
+```
 
 ## Shortcuts
 
 - `Ctrl+S` saves. Unsaved documents use the XDG desktop portal file picker.
 - `Ctrl+Shift+S` saves as.
-- `Ctrl+O` opens a Markdown file through the portal picker.
-- `Ctrl+P` opens the system print dialog.
+- `Ctrl+O` opens a Markdown file.
 - `Ctrl+N` opens a new Omawrite window.
+- `Ctrl+Q` or `Ctrl+W` closes the current window.
+- `Ctrl++` / `Ctrl+-` dynamically zooms the text scale in and out.
+- `Ctrl+0` resets the text scale to 1.0.
 - `Ctrl+Z`, `Ctrl+Shift+Z`, and `Ctrl+Y` handle undo and redo.
-- `Super+F` toggles fullscreen. Qt maps this key as `Meta+F`.
+- `Super+F` or `F11` toggles fullscreen. 
 - `Ctrl+F` searches the document. Use `Enter` or `Ctrl+G` for the next match and `Shift+Enter` for the previous match.
 - `Ctrl+H` opens find and replace.
-- `Ctrl+B`, `Ctrl+I`, and `Ctrl+K` insert bold, italic, and link Markdown.
-- `Ctrl+?` shows the keyboard shortcut reference.
+- `Ctrl+B`, `Ctrl+I`, and `Ctrl+K` insert bold, italic, and link Markdown formatting.
+- `Ctrl+?` displays the keyboard shortcut reference HUD.
 
-Unsaved drafts are recovered after an abnormal exit. Omawrite also watches open files
-and warns before an external change can replace local work.
+## License
 
-Text follows the desktop text size — `omarchy display text size`, or GNOME's
-`text-scaling-factor` — and re-flows without a restart. The default of 12px leaves
-Omawrite at the size it is designed around; larger and smaller sizes scale from there.
-
-## Requirements
-
-- Qt 6: `qt6-base`, `qt6-declarative`, `qt6-quickcontrols2`
-- `xdg-desktop-portal` and a portal backend
-
-The iA Writer Mono font is bundled under the SIL Open Font License 1.1; see
-`fonts/OFL.txt`. The font is copyright Information Architects Inc. and based on
-IBM Plex, copyright IBM Corp.
+The bundled `iA Writer Mono` font is under the SIL Open Font License 1.1; see `fonts/OFL.txt`. 
+The font is copyright Information Architects Inc. and based on IBM Plex, copyright IBM Corp.

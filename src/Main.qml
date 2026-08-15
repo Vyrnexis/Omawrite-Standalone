@@ -14,6 +14,7 @@ ApplicationWindow {
     minimumHeight: 520
     visible: true
     title: (backend.modified ? "* " : "") + backend.fileName + " - Omawrite"
+    flags: Qt.Window | Qt.FramelessWindowHint
 
     readonly property bool darkMode: backend.darkMode
     readonly property color pageColor: backend.themeBackground
@@ -76,7 +77,7 @@ ApplicationWindow {
 
     FontMetrics {
         id: writerFontMetrics
-        font.family: "iA Writer Mono S"
+        font.family: backend.fontFamily
         font.pixelSize: win.editorFontPixelSize
     }
 
@@ -135,6 +136,45 @@ ApplicationWindow {
         searchUpdating = false;
         replaceOpen = false;
         editor.forceActiveFocus();
+    }
+
+    Shortcut {
+        sequence: "Ctrl+="
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            backend.textScale = backend.textScale + 0.1;
+            zoomOverlay.show();
+        }
+    }
+
+    Shortcut {
+        sequence: "Ctrl+-"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            backend.textScale = Math.max(0.1, backend.textScale - 0.1);
+            zoomOverlay.show();
+        }
+    }
+
+    Shortcut {
+        sequence: "Ctrl+0"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            backend.textScale = 1.0;
+            zoomOverlay.show();
+        }
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Q"
+        context: Qt.ApplicationShortcut
+        onActivated: win.close()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+W"
+        context: Qt.ApplicationShortcut
+        onActivated: win.close()
     }
 
     Shortcut {
@@ -326,13 +366,47 @@ ApplicationWindow {
 
     Dialog {
         id: shortcutsDialog
-        modal: true
-        title: "Keyboard shortcuts"
+        title: "Keyboard Shortcuts"
         standardButtons: Dialog.Close
         anchors.centerIn: parent
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
+            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+P  Print\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
             lineHeight: 1.5
+        }
+    }
+
+    Rectangle {
+        id: zoomOverlay
+        anchors.centerIn: parent
+        width: zoomLabel.width + 40
+        height: zoomLabel.height + 20
+        color: win.pageColor
+        border.color: win.mutedColor
+        border.width: 1
+        radius: 8
+        opacity: 0
+        z: 100
+        Behavior on opacity { NumberAnimation { duration: 200 } }
+
+        Label {
+            id: zoomLabel
+            anchors.centerIn: parent
+            text: Math.round(backend.textScale * 100) + "%"
+            color: win.textColor
+            font.family: backend.fontFamily
+            font.pixelSize: 24
+            font.weight: Font.Bold
+        }
+
+        Timer {
+            id: zoomTimer
+            interval: 1500
+            onTriggered: zoomOverlay.opacity = 0
+        }
+
+        function show() {
+            opacity = 0.9;
+            zoomTimer.restart();
         }
     }
 
@@ -537,7 +611,7 @@ ApplicationWindow {
                 width: win.editorWidth
                 height: Math.max(editorFlick.height - y - 96, implicitHeight + 20)
                 text: ""
-                textFormat: TextEdit.PlainText
+                textFormat: TextEdit.RichText
                 wrapMode: TextEdit.Wrap
                 selectByMouse: true
                 persistentSelection: true
@@ -545,7 +619,7 @@ ApplicationWindow {
                 color: win.textColor
                 selectedTextColor: win.strongTextColor
                 selectionColor: win.selectionFill
-                font.family: "iA Writer Mono S"
+                font.family: backend.fontFamily
                 font.pixelSize: win.editorFontPixelSize
                 font.weight: Font.Normal
                 // Native rendering hints glyphs to the pixel grid, which is
@@ -570,7 +644,8 @@ ApplicationWindow {
                     forceActiveFocus();
                     var start = Math.min(selectionStart, selectionEnd);
                     var end = Math.max(selectionStart, selectionEnd);
-                    var selected = text.slice(start, end);
+                    var plainText = getText(0, length).replace(/[\u2028\u2029]/g, "\n");
+                    var selected = plainText.slice(start, end);
                     EditorMutations.replaceRange(editor, start, end,
                                                  before + selected + after,
                                                  before.length,
@@ -603,9 +678,10 @@ ApplicationWindow {
                         replaceSelectionWith("\n");
                         return;
                     }
-                    var lineStart = text.lastIndexOf("\n", cursorPosition - 1) + 1;
-                    var line = text.slice(lineStart, cursorPosition);
-                    var before = text.slice(0, cursorPosition);
+                    var plainText = getText(0, length).replace(/[\u2028\u2029]/g, "\n");
+                    var lineStart = plainText.lastIndexOf("\n", cursorPosition - 1) + 1;
+                    var line = plainText.slice(lineStart, cursorPosition);
+                    var before = plainText.slice(0, cursorPosition);
                     var fences = (before.match(/^\s*```/gm) || []).length;
                     if ((fences % 2) === 1) {
                         replaceSelectionWith("\n");
@@ -649,7 +725,8 @@ ApplicationWindow {
                     if (url === "")
                         return false;
 
-                    var selected = text.slice(start, end);
+                    var plainText = getText(0, length).replace(/[\u2028\u2029]/g, "\n");
+                    var selected = plainText.slice(start, end);
                     var leading = selected.match(/^\s*/)[0];
                     var trailing = selected.match(/\s*$/)[0];
                     var linkText = selected.slice(leading.length,
@@ -700,7 +777,7 @@ ApplicationWindow {
                         return;
                     }
 
-                    var pos = Math.max(0, Math.min(text.length, cursorPosition + direction));
+                    var pos = Math.max(0, Math.min(length, cursorPosition + direction));
                     cursorPosition = direction > 0
                         ? skipHiddenForward(pos)
                         : skipHiddenBackward(pos);
@@ -722,7 +799,8 @@ ApplicationWindow {
                     if (selectionStart !== selectionEnd || cursorPosition < 2)
                         return false;
 
-                    if (text.slice(cursorPosition - 2, cursorPosition) !== "\n\n")
+                    var plainText = getText(0, length).replace(/[\u2028\u2029]/g, "\n");
+                    if (plainText.slice(cursorPosition - 2, cursorPosition) !== "\n\n")
                         return false;
 
                     var start = cursorPosition - 2;
@@ -782,7 +860,7 @@ ApplicationWindow {
                     anchors.left: parent.left
                     anchors.top: parent.top
                     text: "# Start writing"
-                    visible: editor.text.length === 0 && !editor.activeFocus
+                    visible: editor.length === 0 && !editor.activeFocus
                     color: win.mutedColor
                     font.family: editor.font.family
                     font.pixelSize: editor.font.pixelSize
@@ -824,7 +902,7 @@ ApplicationWindow {
             Label {
                 text: backend.status
                 color: win.mutedColor
-                font.family: "iA Writer Mono S"
+                font.family: backend.fontFamily
                 font.pixelSize: win.scaledSize(11)
                 visible: text !== ""
                 elide: Text.ElideRight
@@ -842,7 +920,7 @@ ApplicationWindow {
             text: backend.wordCount + (backend.wordCount === 1 ? " Word" : " Words")
             color: win.mutedColor
             opacity: 0.75
-            font.family: "iA Writer Mono S"
+            font.family: backend.fontFamily
             font.pixelSize: win.scaledSize(11)
         }
 
