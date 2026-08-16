@@ -1,4 +1,5 @@
 #include "markdownhighlighter.h"
+#include "codehighlighter.h"
 
 #include <QColor>
 #include <QFont>
@@ -50,8 +51,9 @@ void MarkdownHighlighter::rebuildFormats() {
     const QColor link = !m_customAccent.isEmpty() ? QColor(m_customAccent)
         : (m_darkMode ? QColor(QStringLiteral("#5584aa")) : QColor(QStringLiteral("#2077b2")));
     const QColor quote = marker;
-    const QColor codeBackground = m_darkMode ? QColor(QStringLiteral("#1c1a1a"))
-                                             : QColor(QStringLiteral("#f8f8f8"));
+    const QColor inlineCodeBackground = m_darkMode ? QColor(QStringLiteral("#1c1a1a"))
+                                                   : QColor(QStringLiteral("#f8f8f8"));
+    const QColor codeBackground = background;
 
     m_markerFormat = QTextCharFormat();
     m_markerFormat.setForeground(marker);
@@ -83,9 +85,42 @@ void MarkdownHighlighter::rebuildFormats() {
     m_italicFormat.setFontItalic(true);
     m_italicFormat.setForeground(text);
 
+    const QColor keyword = m_darkMode ? QColor(QStringLiteral("#c678dd")) : QColor(QStringLiteral("#a626a4"));
+    const QColor string = m_darkMode ? QColor(QStringLiteral("#98c379")) : QColor(QStringLiteral("#50a14f"));
+    const QColor comment = m_darkMode ? QColor(QStringLiteral("#5c6370")) : QColor(QStringLiteral("#a0a1a7"));
+
     m_codeFormat = QTextCharFormat();
     m_codeFormat.setForeground(text);
-    m_codeFormat.setBackground(codeBackground);
+    m_codeFormat.setBackground(inlineCodeBackground);
+
+    m_blockCodeFormat = QTextCharFormat();
+    m_blockCodeFormat.setForeground(text);
+    m_blockCodeFormat.setBackground(codeBackground);
+    m_blockCodeFormat.setProperty(QTextFormat::FullWidthSelection, true);
+
+    m_keywordFormat = QTextCharFormat();
+    m_keywordFormat.setForeground(keyword);
+    m_keywordFormat.setBackground(codeBackground);
+    m_keywordFormat.setFontWeight(QFont::Bold);
+
+    m_stringFormat = QTextCharFormat();
+    m_stringFormat.setForeground(string);
+    m_stringFormat.setBackground(codeBackground);
+
+    m_commentFormat = QTextCharFormat();
+    m_commentFormat.setForeground(comment);
+    m_commentFormat.setBackground(codeBackground);
+    m_commentFormat.setFontItalic(true);
+
+    m_invisibleTextFormat = QTextCharFormat();
+    m_invisibleTextFormat.setForeground(codeBackground);
+    m_invisibleTextFormat.setBackground(codeBackground);
+    m_invisibleTextFormat.setProperty(QTextFormat::FullWidthSelection, true);
+
+    m_codeLanguageLabelFormat = QTextCharFormat();
+    m_codeLanguageLabelFormat.setForeground(text);
+    m_codeLanguageLabelFormat.setBackground(codeBackground);
+    m_codeLanguageLabelFormat.setFontWeight(QFont::Bold);
 
     m_quoteFormat = QTextCharFormat();
     m_quoteFormat.setForeground(quote);
@@ -104,6 +139,63 @@ void MarkdownHighlighter::rebuildFormats() {
 }
 
 void MarkdownHighlighter::highlightBlock(const QString &text) {
+    int state = previousBlockState();
+    if (state == -1) state = 0;
+
+    static const QRegularExpression codeBlockStartRe(QStringLiteral("^```\\s*(\\w*)"));
+    if (state == 0) {
+        QRegularExpressionMatch match = codeBlockStartRe.match(text);
+        if (match.hasMatch()) {
+            QString lang = match.captured(1).toLower();
+            if (lang == QLatin1String("bash") || lang == QLatin1String("sh")) {
+                setCurrentBlockState(2);
+            } else if (lang == QLatin1String("nim")) {
+                setCurrentBlockState(3);
+            } else if (lang == QLatin1String("python") || lang == QLatin1String("py")) {
+                setCurrentBlockState(4);
+            } else if (lang == QLatin1String("toml")) {
+                setCurrentBlockState(5);
+            } else if (lang == QLatin1String("json")) {
+                setCurrentBlockState(6);
+            } else if (lang == QLatin1String("c")) {
+                setCurrentBlockState(7);
+            } else if (lang == QLatin1String("cpp") || lang == QLatin1String("c++")) {
+                setCurrentBlockState(8);
+            } else if (lang == QLatin1String("js") || lang == QLatin1String("javascript")) {
+                setCurrentBlockState(9);
+            } else if (lang == QLatin1String("ruby") || lang == QLatin1String("rb")) {
+                setCurrentBlockState(10);
+            } else {
+                setCurrentBlockState(1);
+            }
+            setFormat(0, text.length() + 1, m_blockCodeFormat);
+            
+            // Hide the '```'
+            setFormat(0, 3, m_hiddenMarkerFormat);
+            // Format the language tag if present
+            if (match.capturedLength(1) > 0) {
+                setFormat(match.capturedStart(1), match.capturedLength(1), m_codeLanguageLabelFormat);
+            }
+            
+            return;
+        }
+    } else if (state > 0) {
+        if (text.startsWith(QStringLiteral("```"))) {
+            setCurrentBlockState(0);
+            setFormat(0, text.length() + 1, m_blockCodeFormat);
+            setFormat(0, text.length(), m_invisibleTextFormat);
+            return;
+        } else {
+            setCurrentBlockState(state);
+            setFormat(0, text.length() + 1, m_blockCodeFormat);
+            CodeHighlighter::Formats formats = {m_keywordFormat, m_stringFormat, m_commentFormat};
+            CodeHighlighter::highlight(text, state, this, formats);
+        }
+        highlightSearch(text);
+        return;
+    }
+
+    setCurrentBlockState(0);
     if (!text.isEmpty()) {
         highlightMarkers(text);
         if (text.contains(QLatin1Char('`')) || text.contains(QLatin1Char('*'))
@@ -201,6 +293,15 @@ void MarkdownHighlighter::highlightInline(const QString &text) {
 
 QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const QString &text) {
     QList<InlineMarkup> markup;
+    if (text.startsWith(QStringLiteral("```"))) {
+        QString trimmed = text.trimmed();
+        if (trimmed == QStringLiteral("```")) {
+            markup.append({InlineKind::CodeBlockMarker, {0, 0}, {{0, static_cast<int>(text.length())}, {0, 0}}});
+        } else {
+            markup.append({InlineKind::CodeBlockMarker, {3, static_cast<int>(text.length()) - 3}, {{0, 3}, {0, 0}}});
+        }
+    }
+
     if (!text.contains(QLatin1Char('*')) && !text.contains(QLatin1Char('_'))
             && !text.contains(QLatin1Char('['))) {
         return markup;
@@ -244,3 +345,5 @@ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const
 
     return markup;
 }
+
+

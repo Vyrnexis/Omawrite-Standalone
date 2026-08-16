@@ -14,12 +14,16 @@ public:
     void setColors(const QString &background, const QString &foreground, const QString &accent);
     void setSearch(const QString &query, int currentMatchStart);
 
+    void applyFormat(int start, int count, const QTextCharFormat &format) {
+        setFormat(start, count, format);
+    }
+
     struct Span {
         int start;
         int length;
     };
 
-    enum class InlineKind { Bold, Italic, Link };
+    enum class InlineKind { Bold, Italic, Link, CodeBlockMarker };
 
     struct InlineMarkup {
         InlineKind kind;
@@ -51,6 +55,12 @@ private:
     QTextCharFormat m_boldFormat;
     QTextCharFormat m_italicFormat;
     QTextCharFormat m_codeFormat;
+    QTextCharFormat m_blockCodeFormat;
+    QTextCharFormat m_keywordFormat;
+    QTextCharFormat m_stringFormat;
+    QTextCharFormat m_commentFormat;
+    QTextCharFormat m_invisibleTextFormat;
+    QTextCharFormat m_codeLanguageLabelFormat;
     QTextCharFormat m_quoteFormat;
     QTextCharFormat m_linkFormat;
     QString m_searchQuery;

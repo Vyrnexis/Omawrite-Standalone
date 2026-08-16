@@ -614,6 +614,7 @@ ApplicationWindow {
                 text: ""
                 textFormat: TextEdit.RichText
                 wrapMode: TextEdit.Wrap
+                tabStopDistance: writerFontMetrics.advanceWidth("    ")
                 selectByMouse: true
                 persistentSelection: true
                 activeFocusOnPress: true

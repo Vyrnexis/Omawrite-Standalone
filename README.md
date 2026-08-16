@@ -14,7 +14,7 @@ This is a fork of the original Omawrite editor. The original project was built e
 - **Custom Themes & Fonts:** Allows custom hex colors for background, foreground, accents, and selections, as well as custom font families.
 - **Distraction-Free UI:** Native OS title bars have been stripped away for a frameless writing experience.
 - **Dynamic Zooming HUD:** Zoom in and out dynamically using `Ctrl++` and `Ctrl+-`, with a transient heads-up display.
-- **Robust Syntax Highlighting:** Updated to properly render inline markdown formatting in Qt 6 RichText mode while retaining standard plain text behavior when saving to disk.
+- **Robust Syntax Highlighting:** Includes GitHub-style code blocks with seamless backtick hiding, native syntax highlighting for Bash, Nim, Python, C/C++, JSON, TOML, JavaScript, and Ruby, and proper rendering of inline markdown formatting in Qt 6 RichText mode.
 
 ## Build and Install
 
