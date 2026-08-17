@@ -212,8 +212,10 @@ void Backend::open(const QUrl &url) {
     QFile file(url.toLocalFile());
 
     if (!file.exists()) {
+        loadDocumentText(QString());
+        clearRecovery();
+        setKnownFileContents(QByteArray(), false);
         setFileUrl(url);
-        loadDocumentText("");
         setModified(false);
         setStatus(QStringLiteral("New file %1").arg(targetName));
         return;

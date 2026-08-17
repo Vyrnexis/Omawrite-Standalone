@@ -15,7 +15,7 @@ This is a fork of the original Omawrite editor. The original project was built e
 - **Distraction-Free UI:** Native OS title bars have been stripped away for a frameless writing experience.
 - **Dynamic Zooming HUD:** Zoom in and out dynamically using `Ctrl++` and `Ctrl+-`, with a transient heads-up display.
 - **Robust Syntax Highlighting:** Includes GitHub-style code blocks with seamless backtick hiding, native syntax highlighting for Bash, Nim, Python, C/C++, JSON, TOML, JavaScript, and Ruby, and proper rendering of inline markdown formatting in Qt 6 RichText mode.
-- **Upstream Integrations:** Manually ported upstream enhancements including [PR #8](https://github.com/omacom-io/omawrite/pull/8) (Markdown link URLs on hover), [PR #9](https://github.com/omacom-io/omawrite/pull/9) (Fix false unsaved changes), and [PR #12](https://github.com/omacom-io/omawrite/pull/12) (Smart Return line breaks).
+- **Upstream Integrations:** Manually ported upstream enhancements including [PR #8](https://github.com/omacom-io/omawrite/pull/8) (Markdown link URLs on hover), [PR #9](https://github.com/omacom-io/omawrite/pull/9) (Fix false unsaved changes), [PR #12](https://github.com/omacom-io/omawrite/pull/12) (Smart Return line breaks), and [PR #13](https://github.com/omacom-io/omawrite/pull/13) (Robust new file handling).
 
 ## Build and Install
 
