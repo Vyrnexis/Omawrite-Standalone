@@ -72,6 +72,7 @@ public:
     Q_INVOKABLE QString clipboardText() const;
     Q_INVOKABLE bool editorTextChanged();
     Q_INVOKABLE QVariantList hiddenRangesAt(int position) const;
+    Q_INVOKABLE QString linkUrlAt(int position) const;
     Q_INVOKABLE void setSearchHighlight(const QString &query, int currentMatchStart);
     Q_INVOKABLE void openExternalUrl(const QUrl &url);
     Q_INVOKABLE QVariantMap windowGeometry() const;
@@ -110,6 +111,7 @@ private:
     void restoreRecovery();
     void clearRecovery();
     QString recoveryPath() const;
+    void setKnownFileContents(const QByteArray &contents, bool known);
     void watchCurrentFile();
     void loadOmarchyTheme();
     void watchOmarchyTheme();
@@ -135,6 +137,7 @@ private:
     QPointer<MarkdownHighlighter> m_highlighter;
     QString m_lastDocumentText;
     QByteArray m_lastKnownFileContents;
+    QString m_lastKnownFileText;
     bool m_hasKnownFileContents = false;
     QString m_recoveryPath;
     std::unique_ptr<QLockFile> m_recoveryLock;

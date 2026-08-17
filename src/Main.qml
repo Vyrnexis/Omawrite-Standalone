@@ -548,6 +548,7 @@ ApplicationWindow {
             }
 
             onMovementStarted: wheelScroll.stop()
+            onContentYChanged: editor.refreshLinkHover()
 
             function scrollByWheel(wheel) {
                 // High-resolution wheels report fractional notches; feed
@@ -702,6 +703,13 @@ ApplicationWindow {
                         }
                         return;
                     }
+                    var lineEnd = text.indexOf("\n", cursorPosition);
+                    var rest = lineEnd < 0 ? text.slice(cursorPosition)
+                                           : text.slice(cursorPosition, lineEnd);
+                    if (/^\s*$/.test(line) && /^\s*$/.test(rest)) {
+                        replaceSelectionWith("\n");
+                        return;
+                    }
                     replaceSelectionWith("\n\n");
                 }
 
@@ -811,6 +819,48 @@ ApplicationWindow {
                     return true;
                 }
 
+                property string hoveredLinkUrl: ""
+                property real linkHoverX: 0
+                property real linkHoverY: 0
+                property real linkHoverRootX: 0
+                property real linkHoverRootY: 0
+
+                function updateLinkHover(x, y) {
+                    var rootPoint = editor.mapToItem(contentRoot, x, y);
+                    linkHoverRootX = rootPoint.x;
+                    linkHoverRootY = rootPoint.y;
+                    linkHoverX = x;
+                    linkHoverY = y;
+                    hoveredLinkUrl = backend.linkUrlAt(positionAt(x, y));
+                }
+
+                function refreshLinkHover() {
+                    if (!editorHoverArea.containsMouse) {
+                        clearLinkHover();
+                        return;
+                    }
+                    var point = editor.mapFromItem(contentRoot,
+                                                   linkHoverRootX, linkHoverRootY);
+                    linkHoverX = point.x;
+                    linkHoverY = point.y;
+                    hoveredLinkUrl = backend.linkUrlAt(positionAt(point.x, point.y));
+                }
+
+                function clearLinkHover() {
+                    hoveredLinkUrl = "";
+                }
+
+                MouseArea {
+                    id: editorHoverArea
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    hoverEnabled: true
+                    cursorShape: Qt.IBeamCursor
+                    onEntered: editor.updateLinkHover(mouseX, mouseY)
+                    onPositionChanged: editor.updateLinkHover(mouse.x, mouse.y)
+                    onExited: editor.clearLinkHover()
+                }
+
                 Keys.priority: Keys.BeforeItem
                 Keys.onPressed: function(event) {
                     var pasteKey = (event.key === Qt.Key_V)
@@ -873,6 +923,40 @@ ApplicationWindow {
                     backend.attachDocument(textDocument);
                     forceActiveFocus();
                 }
+            }
+        }
+
+        Rectangle {
+            id: linkTooltip
+            visible: editor.hoveredLinkUrl !== ""
+            x: {
+                var hoverPosition = editor.positionToRectangle(editor.positionAt(editor.linkHoverX, editor.linkHoverY));
+                var mappedPosition = editor.mapToItem(contentRoot, hoverPosition.x, hoverPosition.y);
+                return Math.max(0, Math.min(mappedPosition.x, contentRoot.width - width));
+            }
+            y: {
+                var hoverPosition = editor.positionToRectangle(editor.positionAt(editor.linkHoverX, editor.linkHoverY));
+                var mappedPosition = editor.mapToItem(contentRoot, hoverPosition.x, hoverPosition.y);
+                return Math.max(0, mappedPosition.y - height - 4);
+            }
+            width: Math.min(linkTooltipText.implicitWidth + 16, contentRoot.width - 16)
+            height: linkTooltipText.implicitHeight + 16
+            radius: 3
+            color: backend.themeBackground
+            border.color: backend.themeAccent
+            border.width: 1
+            z: 100
+
+            Text {
+                id: linkTooltipText
+                anchors.fill: parent
+                anchors.margins: 8
+                text: editor.hoveredLinkUrl
+                color: backend.themeForeground
+                font.family: "iA Writer Mono S"
+                font.pixelSize: win.scaledSize(12)
+                elide: Text.ElideMiddle
+                verticalAlignment: Text.AlignVCenter
             }
         }
 

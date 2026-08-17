@@ -114,6 +114,10 @@ Backend::Backend(QObject *parent) : QObject(parent) {
                     }
                 }
 
+                if (!deleted) {
+                    m_hasKnownFileContents = false;
+                    m_lastKnownFileText.clear();
+                }
                 emit externalChangeDetected(deleted, m_modified);
             });
 
@@ -222,8 +226,7 @@ void Backend::open(const QUrl &url) {
     const QByteArray contents = file.readAll();
     loadDocumentText(QString::fromUtf8(contents));
     clearRecovery();
-    m_lastKnownFileContents = contents;
-    m_hasKnownFileContents = true;
+    setKnownFileContents(contents, true);
     setFileUrl(url);
     watchCurrentFile();
     setModified(false);
@@ -273,11 +276,9 @@ void Backend::reloadFromDisk() {
 void Backend::keepExternalVersion() {
     QFile file(m_fileUrl.toLocalFile());
     if (file.open(QIODevice::ReadOnly)) {
-        m_lastKnownFileContents = file.readAll();
-        m_hasKnownFileContents = true;
+        setKnownFileContents(file.readAll(), true);
     } else {
-        m_lastKnownFileContents.clear();
-        m_hasKnownFileContents = false;
+        setKnownFileContents(QByteArray(), false);
     }
     setModified(true);
     scheduleRecovery();
@@ -363,6 +364,15 @@ bool Backend::editorTextChanged() {
     }
 
     scheduleWordCount();
+    
+    const QString &baseline = m_lastKnownFileText;
+    if (m_hasKnownFileContents && text == baseline) {
+        setModified(false);
+        setStatus(QStringLiteral("Saved"));
+        clearRecovery();
+        return true;
+    }
+
     setModified(true);
     setStatus(QStringLiteral("Unsaved"));
     scheduleRecovery();
@@ -396,6 +406,19 @@ QVariantList Backend::hiddenRangesAt(int position) const {
                                   {QStringLiteral("end"), span.second}});
     }
     return ranges;
+}
+
+QString Backend::linkUrlAt(int position) const {
+    if (!m_document)
+        return {};
+
+    const int maxPosition = m_document->characterCount() - 1;
+    const QTextBlock block =
+        m_document->findBlock(qBound(0, position, maxPosition));
+    if (!block.isValid())
+        return {};
+
+    return MarkdownHighlighter::linkUrlAt(block.text(), position - block.position());
 }
 
 void Backend::setSearchHighlight(const QString &query, int currentMatchStart) {
@@ -506,8 +529,7 @@ void Backend::saveTo(const QUrl &url) {
 
     const bool shouldClose = m_closeAfterSave;
     m_closeAfterSave = false;
-    m_lastKnownFileContents = contents;
-    m_hasKnownFileContents = true;
+    setKnownFileContents(contents, true);
     setFileUrl(url);
     watchCurrentFile();
     QSettings().setValue(lastSaveDirectorySetting,
@@ -527,6 +549,14 @@ void Backend::scheduleRecovery() {
 
 QString Backend::recoveryPath() const {
     return m_recoveryPath;
+}
+
+void Backend::setKnownFileContents(const QByteArray &contents, bool known) {
+    m_lastKnownFileContents = contents;
+    m_hasKnownFileContents = known;
+    m_lastKnownFileText = known
+        ? QString::fromUtf8(contents).replace(QStringLiteral("\r\n"), QStringLiteral("\n"))
+        : QString();
 }
 
 void Backend::writeRecovery() {
@@ -557,11 +587,9 @@ void Backend::restoreRecovery() {
     const QUrl recoveredUrl(recovery.value(QStringLiteral("fileUrl")).toString());
     QFile diskFile(recoveredUrl.toLocalFile());
     if (recoveredUrl.isLocalFile() && diskFile.open(QIODevice::ReadOnly)) {
-        m_lastKnownFileContents = diskFile.readAll();
-        m_hasKnownFileContents = true;
+        setKnownFileContents(diskFile.readAll(), true);
     } else {
-        m_lastKnownFileContents.clear();
-        m_hasKnownFileContents = false;
+        setKnownFileContents(QByteArray(), false);
     }
     setFileUrl(recoveredUrl);
     setModified(true);
