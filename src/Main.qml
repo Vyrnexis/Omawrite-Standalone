@@ -826,7 +826,7 @@ ApplicationWindow {
                 property real linkHoverRootY: 0
 
                 function updateLinkHover(x, y) {
-                    var rootPoint = editor.mapToItem(contentRoot, x, y);
+                    var rootPoint = editor.mapToItem(editorFlick.contentItem, x, y);
                     linkHoverRootX = rootPoint.x;
                     linkHoverRootY = rootPoint.y;
                     linkHoverX = x;
@@ -839,7 +839,7 @@ ApplicationWindow {
                         clearLinkHover();
                         return;
                     }
-                    var point = editor.mapFromItem(contentRoot,
+                    var point = editor.mapFromItem(editorFlick.contentItem,
                                                    linkHoverRootX, linkHoverRootY);
                     linkHoverX = point.x;
                     linkHoverY = point.y;
@@ -931,15 +931,15 @@ ApplicationWindow {
             visible: editor.hoveredLinkUrl !== ""
             x: {
                 var hoverPosition = editor.positionToRectangle(editor.positionAt(editor.linkHoverX, editor.linkHoverY));
-                var mappedPosition = editor.mapToItem(contentRoot, hoverPosition.x, hoverPosition.y);
-                return Math.max(0, Math.min(mappedPosition.x, contentRoot.width - width));
+                var mappedPosition = editor.mapToItem(editorFlick.contentItem, hoverPosition.x, hoverPosition.y);
+                return Math.max(0, Math.min(mappedPosition.x, editorFlick.contentItem.width - width));
             }
             y: {
                 var hoverPosition = editor.positionToRectangle(editor.positionAt(editor.linkHoverX, editor.linkHoverY));
-                var mappedPosition = editor.mapToItem(contentRoot, hoverPosition.x, hoverPosition.y);
+                var mappedPosition = editor.mapToItem(editorFlick.contentItem, hoverPosition.x, hoverPosition.y);
                 return Math.max(0, mappedPosition.y - height - 4);
             }
-            width: Math.min(linkTooltipText.implicitWidth + 16, contentRoot.width - 16)
+            width: Math.min(linkTooltipText.implicitWidth + 16, editorFlick.contentItem.width - 16)
             height: linkTooltipText.implicitHeight + 16
             radius: 3
             color: backend.themeBackground
