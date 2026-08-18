@@ -4,6 +4,26 @@ function normalizePlainText(text) {
     return text.replace(/\r\n/g, "\u2029").replace(/[\r\n]/g, "\u2029");
 }
 
+function toggleWrap(editor, before, after) {
+    var start = Math.min(editor.selectionStart, editor.selectionEnd);
+    var end = Math.max(editor.selectionStart, editor.selectionEnd);
+    var selected = editor.getText(start, end);
+
+    // Selection includes the markers: strip them.
+    if (selected.length >= before.length + after.length
+            && selected.startsWith(before) && selected.endsWith(after)) {
+        var inner = selected.slice(before.length, selected.length - after.length);
+        replaceRange(editor, start, end, inner, 0, inner.length);
+        return;
+    }
+
+    // Wrap the selected inner text.
+    replaceRange(editor, start, end,
+                 before + selected + after,
+                 before.length,
+                 before.length + selected.length);
+}
+
 function replaceRange(editor, rangeStart, rangeEnd, replacement,
                       selectionStartOffset, selectionEndOffset) {
     var start = Math.max(0, Math.min(editor.length, rangeStart));

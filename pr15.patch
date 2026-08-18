@@ -1,0 +1,269 @@
+From 054f62cce85462f69db1c382233aba549a2c7a23 Mon Sep 17 00:00:00 2001
+From: Josh Lambert <josh@lambertmail.xyz>
+Date: Mon, 17 Aug 2026 07:38:23 -0500
+Subject: [PATCH] Add a Ctrl+Shift+X strikethrough shortcut
+
+Wrap the selection in ~~ markers, render the content struck through,
+and hide the markers like the other inline markup. The formatting
+shortcuts now also toggle: pressing Ctrl+B, Ctrl+I, or Ctrl+Shift+X
+again removes the markers instead of stacking another pair.
+---
+ README.md                   |  2 +-
+ src/EditorMutations.js      | 26 ++++++++++++++++
+ src/Main.qml                | 16 +++++-----
+ src/markdownhighlighter.cpp | 20 ++++++++++--
+ src/markdownhighlighter.h   |  3 +-
+ tests/tst_omawrite.cpp      | 62 +++++++++++++++++++++++++++++++++++++
+ 6 files changed, 116 insertions(+), 13 deletions(-)
+
+diff --git a/README.md b/README.md
+index c44ade3..4cee849 100644
+--- a/README.md
++++ b/README.md
+@@ -21,7 +21,7 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
+ - `Super+F` toggles fullscreen. Qt maps this key as `Meta+F`.
+ - `Ctrl+F` searches the document. Use `Enter` or `Ctrl+G` for the next match and `Shift+Enter` for the previous match.
+ - `Ctrl+H` opens find and replace.
+-- `Ctrl+B`, `Ctrl+I`, and `Ctrl+K` insert bold, italic, and link Markdown.
++- `Ctrl+B`, `Ctrl+I`, and `Ctrl+Shift+X` toggle bold, italic, and strikethrough Markdown. `Ctrl+K` inserts a link.
+ - `Ctrl+?` shows the keyboard shortcut reference.
+ 
+ Unsaved drafts are recovered after an abnormal exit. Omawrite also watches open files
+diff --git a/src/EditorMutations.js b/src/EditorMutations.js
+index e0f7b88..7f12a32 100644
+--- a/src/EditorMutations.js
++++ b/src/EditorMutations.js
+@@ -4,6 +4,32 @@ function normalizePlainText(text) {
+     return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+ }
+ 
++function toggleWrap(editor, before, after) {
++    var start = Math.min(editor.selectionStart, editor.selectionEnd);
++    var end = Math.max(editor.selectionStart, editor.selectionEnd);
++    var selected = editor.text.slice(start, end);
++
++    // Selection includes the markers: strip them.
++    if (selected.length >= before.length + after.length
++            && selected.startsWith(before) && selected.endsWith(after)) {
++        var inner = selected.slice(before.length, selected.length - after.length);
++        replaceRange(editor, start, end, inner, 0, inner.length);
++        return;
++    }
++
++    // Selection (or caret) sits directly inside the markers: strip them.
++    if (start >= before.length
++            && editor.text.slice(start - before.length, start) === before
++            && editor.text.slice(end, end + after.length) === after) {
++        replaceRange(editor, start - before.length, end + after.length, selected,
++                     0, selected.length);
++        return;
++    }
++
++    replaceRange(editor, start, end, before + selected + after,
++                 before.length, before.length + selected.length);
++}
++
+ function replaceRange(editor, rangeStart, rangeEnd, replacement,
+                       selectionStartOffset, selectionEndOffset) {
+     var start = Math.max(0, Math.min(editor.text.length, rangeStart));
+diff --git a/src/Main.qml b/src/Main.qml
+index cdcbc3e..613e75a 100644
+--- a/src/Main.qml
++++ b/src/Main.qml
+@@ -166,6 +166,12 @@ ApplicationWindow {
+         onActivated: editor.wrapSelection("*", "*")
+     }
+ 
++    Shortcut {
++        sequence: "Ctrl+Shift+X"
++        context: Qt.WindowShortcut
++        onActivated: editor.wrapSelection("~~", "~~")
++    }
++
+     Shortcut {
+         sequence: "Ctrl+K"
+         context: Qt.WindowShortcut
+@@ -331,7 +337,7 @@ ApplicationWindow {
+         standardButtons: Dialog.Close
+         anchors.centerIn: parent
+         contentItem: Label {
+-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
++            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
+             lineHeight: 1.5
+         }
+     }
+@@ -568,13 +574,7 @@ ApplicationWindow {
+ 
+                 function wrapSelection(before, after) {
+                     forceActiveFocus();
+-                    var start = Math.min(selectionStart, selectionEnd);
+-                    var end = Math.max(selectionStart, selectionEnd);
+-                    var selected = text.slice(start, end);
+-                    EditorMutations.replaceRange(editor, start, end,
+-                                                 before + selected + after,
+-                                                 before.length,
+-                                                 before.length + selected.length);
++                    EditorMutations.toggleWrap(editor, before, after);
+                 }
+ 
+                 function insertLink() {
+diff --git a/src/markdownhighlighter.cpp b/src/markdownhighlighter.cpp
+index 99bc5de..159740d 100644
+--- a/src/markdownhighlighter.cpp
++++ b/src/markdownhighlighter.cpp
+@@ -83,6 +83,10 @@ void MarkdownHighlighter::rebuildFormats() {
+     m_italicFormat.setFontItalic(true);
+     m_italicFormat.setForeground(text);
+ 
++    m_strikethroughFormat = QTextCharFormat();
++    m_strikethroughFormat.setFontStrikeOut(true);
++    m_strikethroughFormat.setForeground(text);
++
+     m_codeFormat = QTextCharFormat();
+     m_codeFormat.setForeground(text);
+     m_codeFormat.setBackground(codeBackground);
+@@ -107,7 +111,8 @@ void MarkdownHighlighter::highlightBlock(const QString &text) {
+     if (!text.isEmpty()) {
+         highlightMarkers(text);
+         if (text.contains(QLatin1Char('`')) || text.contains(QLatin1Char('*'))
+-            || text.contains(QLatin1Char('_')) || text.contains(QLatin1Char('['))) {
++            || text.contains(QLatin1Char('_')) || text.contains(QLatin1Char('['))
++            || text.contains(QLatin1Char('~'))) {
+             highlightInline(text);
+         }
+     }
+@@ -192,7 +197,8 @@ void MarkdownHighlighter::highlightInline(const QString &text) {
+         const QTextCharFormat &contentFormat =
+             item.kind == InlineKind::Bold ? m_boldFormat
+             : item.kind == InlineKind::Italic ? m_italicFormat
+-                                              : m_linkFormat;
++            : item.kind == InlineKind::Strikethrough ? m_strikethroughFormat
++                                                     : m_linkFormat;
+         setFormat(item.content.start, item.content.length, contentFormat);
+         for (const Span &marker : item.markers)
+             setFormat(marker.start, marker.length, m_hiddenMarkerFormat);
+@@ -202,7 +208,7 @@ void MarkdownHighlighter::highlightInline(const QString &text) {
+ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const QString &text) {
+     QList<InlineMarkup> markup;
+     if (!text.contains(QLatin1Char('*')) && !text.contains(QLatin1Char('_'))
+-            && !text.contains(QLatin1Char('['))) {
++            && !text.contains(QLatin1Char('[')) && !text.contains(QLatin1Char('~'))) {
+         return markup;
+     }
+ 
+@@ -229,6 +235,14 @@ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const
+                        {{whole.start, 1}, {whole.start + whole.length - 1, 1}}});
+     }
+ 
++    static const QRegularExpression strikethroughRe(QStringLiteral("(~~)(.+?)(~~)"));
++    QRegularExpressionMatchIterator strikethroughMatches = strikethroughRe.globalMatch(text);
++    while (strikethroughMatches.hasNext()) {
++        const QRegularExpressionMatch match = strikethroughMatches.next();
++        markup.append({InlineKind::Strikethrough, span(match, 2),
++                       {span(match, 1), span(match, 3)}});
++    }
++
+     static const QRegularExpression linkRe(
+         QStringLiteral("\\[([^\\]]+)\\]\\(((?:\\\\.|[^)])+)\\)"));
+     QRegularExpressionMatchIterator linkMatches = linkRe.globalMatch(text);
+diff --git a/src/markdownhighlighter.h b/src/markdownhighlighter.h
+index 59e969f..7dbfe07 100644
+--- a/src/markdownhighlighter.h
++++ b/src/markdownhighlighter.h
+@@ -19,7 +19,7 @@ class MarkdownHighlighter : public QSyntaxHighlighter {
+         int length;
+     };
+ 
+-    enum class InlineKind { Bold, Italic, Link };
++    enum class InlineKind { Bold, Italic, Strikethrough, Link };
+ 
+     struct InlineMarkup {
+         InlineKind kind;
+@@ -50,6 +50,7 @@ class MarkdownHighlighter : public QSyntaxHighlighter {
+     QTextCharFormat m_headingFormat;
+     QTextCharFormat m_boldFormat;
+     QTextCharFormat m_italicFormat;
++    QTextCharFormat m_strikethroughFormat;
+     QTextCharFormat m_codeFormat;
+     QTextCharFormat m_quoteFormat;
+     QTextCharFormat m_linkFormat;
+diff --git a/tests/tst_omawrite.cpp b/tests/tst_omawrite.cpp
+index 5c3306a..c2fb6ed 100644
+--- a/tests/tst_omawrite.cpp
++++ b/tests/tst_omawrite.cpp
+@@ -54,6 +54,17 @@ private slots:
+         QCOMPARE(markup.at(2).markers[0].length, 1);
+     }
+ 
++    void findsStrikethroughRanges() {
++        const auto markup =
++            MarkdownHighlighter::inlineMarkup(QStringLiteral("keep ~~drop this~~ keep"));
++        QCOMPARE(markup.size(), 1);
++        QCOMPARE(markup.at(0).kind, MarkdownHighlighter::InlineKind::Strikethrough);
++        QCOMPARE(markup.at(0).content.start, 7);
++        QCOMPARE(markup.at(0).content.length, 9);
++        QCOMPARE(markup.at(0).markers[0].length, 2);
++        QCOMPARE(markup.at(0).markers[1].length, 2);
++    }
++
+     void loadsCurrentOmarchyTheme() {
+         QTemporaryDir homeDirectory;
+         QVERIFY(homeDirectory.isValid());
+@@ -112,6 +123,57 @@ private slots:
+         QTRY_COMPARE(externalChangeSpy.count(), 1);
+     }
+ 
++    void togglesWrappedSelection() {
++        const QString mutationsPath = QFINDTESTDATA("../src/EditorMutations.js");
++        QVERIFY(!mutationsPath.isEmpty());
++
++        QQmlEngine engine;
++        QQmlComponent component(&engine);
++        const QByteArray harness = R"QML(
++            import QtQuick
++            import "EditorMutations.js" as EditorMutations
++
++            TextEdit {
++                property string wrappedText
++                property string unwrappedText
++                property int unwrappedSelectionStart
++                property int unwrappedSelectionEnd
++                property string emptyToggleText
++
++                Component.onCompleted: {
++                    text = "strike this";
++                    select(0, 6);
++                    EditorMutations.toggleWrap(this, "~~", "~~");
++                    wrappedText = text;
++                    EditorMutations.toggleWrap(this, "~~", "~~");
++                    unwrappedText = text;
++                    unwrappedSelectionStart = selectionStart;
++                    unwrappedSelectionEnd = selectionEnd;
++
++                    text = "";
++                    cursorPosition = 0;
++                    EditorMutations.toggleWrap(this, "~~", "~~");
++                    EditorMutations.toggleWrap(this, "~~", "~~");
++                    emptyToggleText = text;
++                }
++            }
++        )QML";
++        const QUrl harnessUrl = QUrl::fromLocalFile(
++            QFileInfo(mutationsPath).absolutePath() + QStringLiteral("/ToggleHarness.qml"));
++        component.setData(harness, harnessUrl);
++        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
++        QScopedPointer<QObject> editor(component.create());
++        QVERIFY2(editor, qPrintable(component.errorString()));
++
++        QCOMPARE(editor->property("wrappedText").toString(),
++                 QStringLiteral("~~strike~~ this"));
++        QCOMPARE(editor->property("unwrappedText").toString(),
++                 QStringLiteral("strike this"));
++        QCOMPARE(editor->property("unwrappedSelectionStart").toInt(), 0);
++        QCOMPARE(editor->property("unwrappedSelectionEnd").toInt(), 6);
++        QCOMPARE(editor->property("emptyToggleText").toString(), QString());
++    }
++
+     void keepsCursorAndSelectionStableAcrossInsertions() {
+         const QString mutationsPath = QFINDTESTDATA("../src/EditorMutations.js");
+         QVERIFY(!mutationsPath.isEmpty());
