@@ -380,7 +380,7 @@ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const
     }
 
     static const QRegularExpression linkRe(
-        QStringLiteral("\\[([^\\]]+)\\]\\(((?:\\\\.|[^)])+)\\)"));
+        QStringLiteral("(?<!!)\\[([^\\]]+)\\]\\(((?:\\\\.|[^)])+)\\)"));
     QRegularExpressionMatchIterator linkMatches = linkRe.globalMatch(text);
     while (linkMatches.hasNext()) {
         const QRegularExpressionMatch match = linkMatches.next();
@@ -389,6 +389,20 @@ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const
         const int contentEnd = content.start + content.length;
         markup.append({InlineKind::Link, content,
                        {{whole.start, 1},
+                        {contentEnd, whole.start + whole.length - contentEnd}},
+                       span(match, 2)});
+    }
+
+    static const QRegularExpression imageRe(
+        QStringLiteral("!\\[([^\\]]*)\\]\\(((?:\\\\.|[^)])+)\\)"));
+    QRegularExpressionMatchIterator imageMatches = imageRe.globalMatch(text);
+    while (imageMatches.hasNext()) {
+        const QRegularExpressionMatch match = imageMatches.next();
+        const Span whole = span(match, 0);
+        const Span content = span(match, 1);
+        const int contentEnd = content.start + content.length;
+        markup.append({InlineKind::Image, content,
+                       {{whole.start, 2},
                         {contentEnd, whole.start + whole.length - contentEnd}},
                        span(match, 2)});
     }
@@ -403,6 +417,22 @@ QString MarkdownHighlighter::linkUrlAt(const QString &text, int position) {
     const QList<InlineMarkup> markup = inlineMarkup(text);
     for (const InlineMarkup &item : markup) {
         if (item.kind != InlineKind::Link
+                || position < item.content.start
+                || position >= item.content.start + item.content.length) {
+            continue;
+        }
+        return text.mid(item.destination.start, item.destination.length);
+    }
+    return {};
+}
+
+QString MarkdownHighlighter::imageUrlAt(const QString &text, int position) {
+    if (position < 0 || position >= text.length())
+        return {};
+
+    const QList<InlineMarkup> markup = inlineMarkup(text);
+    for (const InlineMarkup &item : markup) {
+        if (item.kind != InlineKind::Image
                 || position < item.content.start
                 || position >= item.content.start + item.content.length) {
             continue;

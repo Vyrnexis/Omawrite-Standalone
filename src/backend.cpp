@@ -494,6 +494,38 @@ QString Backend::linkUrlAt(int position) const {
     return MarkdownHighlighter::linkUrlAt(block.text(), position - block.position());
 }
 
+QString Backend::imageUrlAt(int position) const {
+    if (!m_document)
+        return {};
+
+    const int maxPosition = m_document->characterCount() - 1;
+    const QTextBlock block =
+        m_document->findBlock(qBound(0, position, maxPosition));
+    if (!block.isValid())
+        return {};
+
+    return MarkdownHighlighter::imageUrlAt(block.text(), position - block.position());
+}
+
+QUrl Backend::resolveImageUrl(const QString &rawUrl) const {
+    const QString trimmed = rawUrl.trimmed();
+    if (trimmed.isEmpty())
+        return {};
+
+    const QUrl parsed(trimmed);
+    if (parsed.isValid() && !parsed.scheme().isEmpty())
+        return parsed;
+
+    if (m_fileUrl.isLocalFile()) {
+        const QFileInfo docInfo(m_fileUrl.toLocalFile());
+        const QDir docDir = docInfo.dir();
+        const QString resolvedPath = docDir.filePath(trimmed);
+        return QUrl::fromLocalFile(resolvedPath);
+    }
+
+    return QUrl::fromLocalFile(defaultDirectory().filePath(trimmed));
+}
+
 void Backend::setSearchHighlight(const QString &query, int currentMatchStart) {
     if (m_highlighter)
         m_highlighter->setSearch(query, currentMatchStart);

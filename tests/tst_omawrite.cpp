@@ -46,12 +46,21 @@ private slots:
 
     void findsInlineMarkdownRanges() {
         const auto markup = MarkdownHighlighter::inlineMarkup(
-            QStringLiteral("**bold** and *italic* and [site](https://example.com)"));
-        QCOMPARE(markup.size(), 3);
+            QStringLiteral("**bold** and *italic* and [site](https://example.com) and ![photo](assets/test.png)"));
+        QCOMPARE(markup.size(), 4);
         QCOMPARE(markup.at(0).content.start, 2);
         QCOMPARE(markup.at(0).content.length, 4);
         QCOMPARE(markup.at(2).content.length, 4);
         QCOMPARE(markup.at(2).markers[0].length, 1);
+        QCOMPARE(markup.at(3).kind, MarkdownHighlighter::InlineKind::Image);
+        QCOMPARE(markup.at(3).content.length, 5);
+        QCOMPARE(markup.at(3).markers[0].length, 2);
+
+        const QString sample = QStringLiteral("Check [link](https://foo.com) and ![pic](image.png)");
+        QCOMPARE(MarkdownHighlighter::linkUrlAt(sample, 8), QStringLiteral("https://foo.com"));
+        QCOMPARE(MarkdownHighlighter::imageUrlAt(sample, 8), QString());
+        QCOMPARE(MarkdownHighlighter::imageUrlAt(sample, 38), QStringLiteral("image.png"));
+        QCOMPARE(MarkdownHighlighter::linkUrlAt(sample, 38), QString());
     }
 
     void loadsCurrentStandaloneConfig() {

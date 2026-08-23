@@ -25,7 +25,7 @@ public:
         int length;
     };
 
-    enum class InlineKind { Bold, Italic, Strikethrough, Link, CodeBlockMarker };
+    enum class InlineKind { Bold, Italic, Strikethrough, Link, Image, CodeBlockMarker };
 
     struct InlineMarkup {
         InlineKind kind;
@@ -39,6 +39,7 @@ public:
     // Backend::hiddenRangesAt) to skip the caret over the hidden markers.
     static QList<InlineMarkup> inlineMarkup(const QString &text);
     static QString linkUrlAt(const QString &text, int position);
+    static QString imageUrlAt(const QString &text, int position);
 
 protected:
     void highlightBlock(const QString &text) override;

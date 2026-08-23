@@ -917,6 +917,7 @@ ApplicationWindow {
                 }
 
                 property string hoveredLinkUrl: ""
+                property string hoveredImageUrl: ""
                 property real linkHoverX: 0
                 property real linkHoverY: 0
                 property real linkHoverRootX: 0
@@ -928,7 +929,9 @@ ApplicationWindow {
                     linkHoverRootY = rootPoint.y;
                     linkHoverX = x;
                     linkHoverY = y;
-                    hoveredLinkUrl = backend.linkUrlAt(positionAt(x, y));
+                    var pos = positionAt(x, y);
+                    hoveredImageUrl = backend.imageUrlAt(pos);
+                    hoveredLinkUrl = hoveredImageUrl === "" ? backend.linkUrlAt(pos) : "";
                 }
 
                 function refreshLinkHover() {
@@ -940,11 +943,14 @@ ApplicationWindow {
                                                    linkHoverRootX, linkHoverRootY);
                     linkHoverX = point.x;
                     linkHoverY = point.y;
-                    hoveredLinkUrl = backend.linkUrlAt(positionAt(point.x, point.y));
+                    var pos = positionAt(point.x, point.y);
+                    hoveredImageUrl = backend.imageUrlAt(pos);
+                    hoveredLinkUrl = hoveredImageUrl === "" ? backend.linkUrlAt(pos) : "";
                 }
 
                 function clearLinkHover() {
                     hoveredLinkUrl = "";
+                    hoveredImageUrl = "";
                 }
 
                 MouseArea {
@@ -1054,6 +1060,65 @@ ApplicationWindow {
                 font.pixelSize: win.scaledSize(12)
                 elide: Text.ElideMiddle
                 verticalAlignment: Text.AlignVCenter
+            }
+        }
+
+        Rectangle {
+            id: imageTooltip
+            visible: editor.hoveredImageUrl !== ""
+            x: {
+                var hoverPosition = editor.positionToRectangle(editor.positionAt(editor.linkHoverX, editor.linkHoverY));
+                var mappedPosition = editor.mapToItem(editorFlick.contentItem, hoverPosition.x, hoverPosition.y);
+                return Math.max(0, Math.min(mappedPosition.x, editorFlick.contentItem.width - width));
+            }
+            y: {
+                var hoverPosition = editor.positionToRectangle(editor.positionAt(editor.linkHoverX, editor.linkHoverY));
+                var mappedPosition = editor.mapToItem(editorFlick.contentItem, hoverPosition.x, hoverPosition.y);
+                var targetY = mappedPosition.y - height - 8;
+                return targetY >= 0 ? targetY : mappedPosition.y + hoverPosition.height + 8;
+            }
+            width: Math.min(Math.max(win.scaledSize(180), previewImage.implicitWidth > 0 ? previewImage.implicitWidth + 16 : win.scaledSize(220)), Math.min(win.scaledSize(360), editorFlick.contentItem.width - 24))
+            height: previewColumn.implicitHeight + 16
+            radius: 6
+            color: backend.themeBackground
+            border.color: backend.themeAccent
+            border.width: 1
+            z: 100
+
+            Column {
+                id: previewColumn
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 6
+
+                Image {
+                    id: previewImage
+                    width: parent.width
+                    height: Math.min(win.scaledSize(200), implicitHeight > 0 && implicitWidth > 0 ? Math.round(implicitHeight * width / implicitWidth) : win.scaledSize(140))
+                    fillMode: Image.PreserveAspectFit
+                    source: backend.resolveImageUrl(editor.hoveredImageUrl)
+                    asynchronous: true
+                    clip: true
+                    visible: status === Image.Ready
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "transparent"
+                        border.color: win.mutedColor
+                        border.width: 1
+                        opacity: 0.3
+                    }
+                }
+
+                Label {
+                    width: parent.width
+                    text: previewImage.status === Image.Error ? "Image not found / failed to load" : (previewImage.status === Image.Loading ? "Loading image..." : editor.hoveredImageUrl)
+                    color: previewImage.status === Image.Error ? "#e06c75" : win.mutedColor
+                    font.family: "iA Writer Mono S"
+                    font.pixelSize: win.scaledSize(11)
+                    elide: Text.ElideMiddle
+                    horizontalAlignment: Text.AlignHCenter
+                }
             }
         }
 
