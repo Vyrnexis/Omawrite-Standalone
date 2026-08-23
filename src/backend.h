@@ -105,6 +105,7 @@ public:
     Q_INVOKABLE void saveWindowGeometry(int x, int y, int width, int height, bool maximized);
     Q_INVOKABLE void toggleFocusMode();
     Q_INVOKABLE void updateCursorPosition(int position);
+    Q_INVOKABLE QVariantList documentHeadings() const;
 
 signals:
     void fileUrlChanged();

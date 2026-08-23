@@ -17,6 +17,7 @@ This is a fork of the original Omawrite editor. The original project was built e
 - **Auto-Pairing & Selection Wrapping:** Typing brackets `()`, `[]`, `{}`, quotes `""`, `''`, or `` ` `` automatically pairs matching characters or wraps selected text.
 - **Interactive Task Lists:** Smart `- [ ]` and `- [x]` task list continuation on `Enter`, with instant checkbox toggling via `Ctrl+Shift+C`.
 - **Extended Writing Statistics HUD:** Hovering over the footer word count reveals a detailed HUD showing total words, character count, paragraph count, and estimated reading time.
+- **Document Heading Navigation HUD:** Pressing `Ctrl+Shift+O` opens a structured popover of all Markdown headings (`#` through `######`) to jump across sections in long documents.
 - **Image & GIF Hover Preview HUD:** Hovering over Markdown image syntax (`![alt](path/or/url)`) or HTML `<img src="...">` tags renders an interactive preview card with aspect-ratio fitting, supporting local files, remote URLs, and animated GIF playback.
 - **Robust Syntax Highlighting:** Includes GitHub-style code blocks with seamless backtick hiding, native syntax highlighting for Bash, Nim, Python, C/C++, JSON, TOML, JavaScript, and Ruby, and proper rendering of inline markdown formatting in Qt 6 RichText mode.
 - **Upstream Integrations:** Manually ported upstream enhancements including:
@@ -76,6 +77,7 @@ text_scale = 1.0
 - `Ctrl+Shift+S` saves as.
 - `Ctrl+O` opens a Markdown file.
 - `Ctrl+E` toggles the folder sidebar.
+- `Ctrl+Shift+O` opens document heading navigation.
 - `Ctrl+N` opens a new Omawrite window.
 - `Ctrl+Q` or `Ctrl+W` closes the current window.
 - `Ctrl++` / `Ctrl+-` dynamically zooms the text scale in and out.

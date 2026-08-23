@@ -57,6 +57,13 @@ ApplicationWindow {
             editor.forceActiveFocus();
     }
 
+    property var headingsList: []
+
+    function openHeadingsDialog() {
+        headingsList = backend.documentHeadings();
+        headingsDialog.open();
+    }
+
     function toggleSidebar() {
         if (!sidebarOpen)
             setSidebarOpen(true);
@@ -259,6 +266,12 @@ ApplicationWindow {
     }
 
     Shortcut {
+        sequence: "Ctrl+Shift+O"
+        context: Qt.ApplicationShortcut
+        onActivated: win.openHeadingsDialog()
+    }
+
+    Shortcut {
         sequence: "Ctrl+Shift+T"
         context: Qt.ApplicationShortcut
         onActivated: {
@@ -425,8 +438,98 @@ ApplicationWindow {
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+Shift+C  Toggle Task Checkbox\nCtrl+K  Link\nCtrl+P  Print\nCtrl+Shift+T  Focus Mode\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
+            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+Shift+O  Headings\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+Shift+C  Toggle Task Checkbox\nCtrl+K  Link\nCtrl+P  Print\nCtrl+Shift+T  Focus Mode\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
             lineHeight: 1.5
+        }
+    }
+
+    Dialog {
+        id: headingsDialog
+        title: "Document Headings"
+        standardButtons: Dialog.Close
+        width: Math.min(win.scaledSize(460), win.width - 48)
+        height: Math.min(win.scaledSize(420), win.height - 80)
+        x: Math.round((win.width - width) / 2)
+        y: Math.round((win.height - height) / 2)
+
+        contentItem: Column {
+            spacing: 8
+
+            Label {
+                text: win.headingsList.length === 0 ? "No headings found in document." : ""
+                visible: win.headingsList.length === 0
+                color: win.mutedColor
+                font.pixelSize: win.scaledSize(14)
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            ListView {
+                id: headingsListView
+                width: parent.width
+                height: parent.height
+                clip: true
+                visible: win.headingsList.length > 0
+                model: win.headingsList
+                focus: true
+
+                delegate: ItemDelegate {
+                    width: headingsListView.width
+                    height: win.scaledSize(34)
+                    highlighted: ListView.isCurrentItem
+
+                    contentItem: Row {
+                        anchors.fill: parent
+                        anchors.leftMargin: Math.max(8, (modelData.level - 1) * win.scaledSize(18) + 8)
+                        anchors.rightMargin: 8
+                        spacing: 8
+
+                        Label {
+                            text: "H" + modelData.level
+                            color: backend.themeAccent
+                            font.family: "iA Writer Mono S"
+                            font.pixelSize: win.scaledSize(11)
+                            font.bold: true
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Label {
+                            text: modelData.title
+                            color: highlighted ? backend.themeForeground : win.textColor
+                            font.family: backend.fontFamily
+                            font.pixelSize: win.scaledSize(13)
+                            font.bold: modelData.level <= 2
+                            elide: Text.ElideRight
+                            width: parent.width - win.scaledSize(40)
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    onClicked: {
+                        headingsDialog.close();
+                        editor.cursorPosition = modelData.position;
+                        editor.forceActiveFocus();
+                        Qt.callLater(editorFlick.ensureCursorVisible);
+                    }
+                }
+
+                Keys.onReturnPressed: {
+                    if (currentIndex >= 0 && currentIndex < win.headingsList.length) {
+                        var item = win.headingsList[currentIndex];
+                        headingsDialog.close();
+                        editor.cursorPosition = item.position;
+                        editor.forceActiveFocus();
+                        Qt.callLater(editorFlick.ensureCursorVisible);
+                    }
+                }
+                Keys.onEscapePressed: headingsDialog.close()
+            }
+        }
+
+        onOpened: {
+            if (win.headingsList.length > 0) {
+                headingsListView.currentIndex = 0;
+                headingsListView.forceActiveFocus();
+            }
         }
     }
 

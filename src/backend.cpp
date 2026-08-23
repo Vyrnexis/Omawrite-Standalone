@@ -538,6 +538,42 @@ void Backend::openExternalUrl(const QUrl &url) {
         QDesktopServices::openUrl(url);
 }
 
+QVariantList Backend::documentHeadings() const {
+    QVariantList list;
+    if (!m_document)
+        return list;
+
+    static const QRegularExpression headingRe(QStringLiteral("^(#{1,6})\\s+(.+)$"));
+    QTextBlock block = m_document->firstBlock();
+    int lineNumber = 1;
+    bool inCodeBlock = false;
+
+    while (block.isValid()) {
+        const QString text = block.text();
+        if (text.startsWith(QStringLiteral("```")))
+            inCodeBlock = !inCodeBlock;
+
+        if (!inCodeBlock) {
+            const QRegularExpressionMatch match = headingRe.match(text);
+            if (match.hasMatch()) {
+                const int level = match.captured(1).length();
+                const QString title = match.captured(2).trimmed();
+                list.append(QVariantMap{
+                    {QStringLiteral("title"), title},
+                    {QStringLiteral("level"), level},
+                    {QStringLiteral("position"), block.position()},
+                    {QStringLiteral("lineNumber"), lineNumber}
+                });
+            }
+        }
+
+        block = block.next();
+        ++lineNumber;
+    }
+
+    return list;
+}
+
 QVariantMap Backend::windowGeometry() const {
     QSettings settings;
     return {{QStringLiteral("x"), settings.value(QStringLiteral("window/x"), -1)},
