@@ -13,7 +13,7 @@ Originally based on [omacom-io/omawrite](https://github.com/omacom-io/omawrite),
 
 ### Ported Upstream Pull Requests
 We have ported and integrated key upstream pull requests from [omacom-io/omawrite](https://github.com/omacom-io/omawrite/pulls):
-- **[PR #8](https://github.com/omacom-io/omawrite/pull/8): Markdown link URLs on hover** — Hovering over Markdown links shows destination targets with click-to-open support.
+- **[PR #8](https://github.com/omacom-io/omawrite/pull/8): Markdown link URLs on hover** — Hovering over Markdown links shows destination targets with `Ctrl+Click` to open in browser.
 - **[PR #9](https://github.com/omacom-io/omawrite/pull/9): Fix false unsaved changes** — Prevents false-positive modified dirty state on unmodified documents.
 - **[PR #12](https://github.com/omacom-io/omawrite/pull/12): Smart Return line breaks** — Automatically continues numbered, bulleted, and blockquote lists on `Enter`.
 - **[PR #13](https://github.com/omacom-io/omawrite/pull/13): Robust new file handling** — Clean file lifecycle handling across new windows and uncommitted buffers.

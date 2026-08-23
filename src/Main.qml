@@ -1130,12 +1130,32 @@ ApplicationWindow {
                 MouseArea {
                     id: editorHoverArea
                     anchors.fill: parent
-                    acceptedButtons: Qt.NoButton
+                    acceptedButtons: Qt.LeftButton
                     hoverEnabled: true
-                    cursorShape: Qt.IBeamCursor
+                    cursorShape: {
+                        if (editor.hoveredLinkUrl !== "" && (mouseModifiers & Qt.ControlModifier))
+                            return Qt.PointingHandCursor;
+                        return Qt.IBeamCursor;
+                    }
+                    property int mouseModifiers: Qt.NoModifier
+
                     onEntered: editor.updateLinkHover(mouseX, mouseY)
-                    onPositionChanged: editor.updateLinkHover(mouse.x, mouse.y)
-                    onExited: editor.clearLinkHover()
+                    onPositionChanged: function(mouse) {
+                        mouseModifiers = mouse.modifiers;
+                        editor.updateLinkHover(mouse.x, mouse.y);
+                    }
+                    onExited: {
+                        mouseModifiers = Qt.NoModifier;
+                        editor.clearLinkHover();
+                    }
+                    onPressed: function(mouse) {
+                        if ((mouse.modifiers & Qt.ControlModifier) && editor.hoveredLinkUrl !== "") {
+                            backend.openExternalUrl(editor.hoveredLinkUrl);
+                            mouse.accepted = true;
+                            return;
+                        }
+                        mouse.accepted = false;
+                    }
                 }
 
                 Keys.priority: Keys.BeforeItem
