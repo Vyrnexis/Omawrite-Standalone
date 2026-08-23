@@ -1100,7 +1100,7 @@ ApplicationWindow {
                     visible: previewImage.status === Image.Ready
                     clip: true
 
-                    Image {
+                    AnimatedImage {
                         id: previewImage
                         anchors.fill: parent
                         fillMode: Image.PreserveAspectFit
@@ -1108,6 +1108,7 @@ ApplicationWindow {
                         asynchronous: true
                         smooth: true
                         mipmap: true
+                        playing: true
 
                         Rectangle {
                             anchors.fill: parent
