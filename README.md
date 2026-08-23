@@ -21,6 +21,9 @@ This is a fork of the original Omawrite editor. The original project was built e
   - [PR #12](https://github.com/omacom-io/omawrite/pull/12): Smart Return line breaks
   - [PR #13](https://github.com/omacom-io/omawrite/pull/13): Robust new file handling
   - [PR #15](https://github.com/omacom-io/omawrite/pull/15): Strikethrough formatting with smart toggle logic
+  - [PR #17](https://github.com/omacom-io/omawrite/pull/17): Focus mode with paragraph dimming (`Ctrl+Shift+T`)
+  - [PR #18](https://github.com/omacom-io/omawrite/pull/18): Prevent editor clipping in narrow windows
+  - [PR #22](https://github.com/omacom-io/omawrite/pull/22): Toggleable file sidebar (`Ctrl+E`)
 
 ## Build and Install
 
@@ -68,6 +71,7 @@ text_scale = 1.0
 - `Ctrl+S` saves. Unsaved documents use the XDG desktop portal file picker.
 - `Ctrl+Shift+S` saves as.
 - `Ctrl+O` opens a Markdown file.
+- `Ctrl+E` toggles the folder sidebar.
 - `Ctrl+N` opens a new Omawrite window.
 - `Ctrl+Q` or `Ctrl+W` closes the current window.
 - `Ctrl++` / `Ctrl+-` dynamically zooms the text scale in and out.
@@ -77,6 +81,7 @@ text_scale = 1.0
 - `Ctrl+F` searches the document. Use `Enter` or `Ctrl+G` for the next match and `Shift+Enter` for the previous match.
 - `Ctrl+H` opens find and replace.
 - `Ctrl+B`, `Ctrl+I`, and `Ctrl+Shift+X` toggle bold, italic, and strikethrough Markdown. `Ctrl+K` inserts a link.
+- `Ctrl+Shift+T` toggles focus mode (typewriter centering, paragraph dimming).
 - `Ctrl+?` displays the keyboard shortcut reference HUD.
 
 ## License

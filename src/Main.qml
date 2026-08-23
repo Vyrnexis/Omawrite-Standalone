@@ -27,11 +27,16 @@ ApplicationWindow {
     // the app at the sizes it was designed around.
     readonly property real textScale: backend.textScale
     readonly property int editorFontPixelSize: scaledSize(20)
+    // Never wider than the Flickable's viewport, whatever the floor asks for:
+    // a tiling compositor can resize the window below its minimum width.
     readonly property int editorWidth: Math.min(
         Math.round(writerFontMetrics.averageCharacterWidth * 65),
-        Math.max(360, width - Math.round(writerFontMetrics.averageCharacterWidth * 20)))
+        Math.max(360, width - fileSidebar.width - Math.round(writerFontMetrics.averageCharacterWidth * 20)),
+        Math.max(0, width - fileSidebar.width - 48))
     property bool closeConfirmed: false
     property bool searchOpen: false
+    property bool sidebarOpen: false
+    property int sidebarLogicalWidth: 240
     property bool searchUpdating: false
     property var searchMatches: []
     property int searchMatchIndex: -1
@@ -43,6 +48,23 @@ ApplicationWindow {
     Material.theme: darkMode ? Material.Dark : Material.Light
     Material.accent: backend.themeAccent
     color: pageColor
+
+    function setSidebarOpen(open) {
+        sidebarOpen = open;
+        if (open)
+            fileSidebar.focusList();
+        else
+            editor.forceActiveFocus();
+    }
+
+    function toggleSidebar() {
+        if (!sidebarOpen)
+            setSidebarOpen(true);
+        else if (fileSidebar.listHasFocus)
+            setSidebarOpen(false);
+        else
+            setSidebarOpen(false);
+    }
 
     onClosing: function(close) {
         if (closeConfirmed || !backend.modified)
@@ -225,6 +247,21 @@ ApplicationWindow {
     }
 
     Shortcut {
+        sequence: "Ctrl+E"
+        context: Qt.ApplicationShortcut
+        onActivated: win.toggleSidebar()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Shift+T"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            backend.updateCursorPosition(editor.cursorPosition);
+            backend.toggleFocusMode();
+        }
+    }
+
+    Shortcut {
         sequence: "Ctrl+O"
         context: Qt.ApplicationShortcut
         onActivated: backend.openDialog()
@@ -311,6 +348,10 @@ ApplicationWindow {
             externalChangeDialog.locallyModified = locallyModified;
             externalChangeDialog.open();
         }
+
+        function onFocusModeChanged() {
+            Qt.callLater(editorFlick.ensureCursorVisible);
+        }
     }
 
     Dialogs.FileDialog {
@@ -374,10 +415,11 @@ ApplicationWindow {
         id: shortcutsDialog
         title: "Keyboard Shortcuts"
         standardButtons: Dialog.Close
+        width: Math.min(win.scaledSize(380), win.width - 48)
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+P  Print\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
+            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+P  Print\nCtrl+Shift+T  Focus Mode\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
             lineHeight: 1.5
         }
     }
@@ -417,8 +459,50 @@ ApplicationWindow {
         }
     }
 
+    FileSidebar {
+        id: fileSidebar
+        objectName: "fileSidebar"
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        expanded: win.sidebarOpen
+        logicalWidth: win.sidebarLogicalWidth
+        darkMode: win.darkMode
+        textScale: win.textScale
+        pageColor: win.pageColor
+        textColor: win.textColor
+        mutedColor: win.mutedColor
+        accentColor: backend.themeAccent
+        selectionFill: win.selectionFill
+        folderUrl: backend.folderUrl
+        folderName: backend.folderName
+        folderHasParent: backend.folderHasParent
+        entries: backend.folderEntries
+        currentFileUrl: backend.fileUrl
+
+        onParentFolderRequested: backend.openParentFolder()
+        onFolderRequested: function(folderUrl) { backend.setFolder(folderUrl); }
+        onFileRequested: function(fileUrl) { win.requestOpen(fileUrl); }
+        onCreateDocumentRequested: function(name) {
+            var docUrl = backend.createDocument(name);
+            if (docUrl.toString().length > 0) {
+                fileSidebar.selectUrl(docUrl);
+                win.requestOpen(docUrl);
+            }
+        }
+        onCreateFolderRequested: function(name) {
+            var folderUrl = backend.createFolder(name);
+            if (folderUrl.toString().length > 0)
+                fileSidebar.selectUrl(folderUrl);
+        }
+        onWidthChangeRequested: function(width) { win.sidebarLogicalWidth = width; }
+        onWidthCommitted: backend.saveSidebarWidth(win.sidebarLogicalWidth)
+        onDismissed: editor.forceActiveFocus()
+    }
+
     Item {
         anchors.fill: parent
+        anchors.leftMargin: fileSidebar.width
 
         Flickable {
             id: editorFlick
@@ -428,6 +512,7 @@ ApplicationWindow {
             clip: true
             contentWidth: width
             contentHeight: Math.max(height, editor.y + editor.implicitHeight + 220)
+                + (backend.focusMode ? Math.round(height / 2) : 0)
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {
                 policy: ScrollBar.AsNeeded
@@ -600,6 +685,12 @@ ApplicationWindow {
             // Keep the editing caret within the viewport so writing past the
             // bottom edge scrolls the page along with the text.
             function ensureCursorVisible() {
+                if (backend.focusMode) {
+                    var cursorCenter = editor.y + editor.cursorRectangle.y
+                        + editor.cursorRectangle.height / 2;
+                    scrollTo(clampContentY(cursorCenter - height / 2));
+                    return;
+                }
                 var margin = win.editorFontPixelSize * 2;
                 var cursorTop = editor.y + editor.cursorRectangle.y;
                 var cursorBottom = cursorTop + editor.cursorRectangle.height;
@@ -615,7 +706,9 @@ ApplicationWindow {
                 id: editor
                 objectName: "sourceEditor"
                 x: Math.round((editorFlick.width - width) / 2)
-                y: Math.max(42, Math.round(win.height * 0.05))
+                y: backend.focusMode
+                    ? Math.round(editorFlick.height / 2)
+                    : Math.max(42, Math.round(win.height * 0.05))
                 width: win.editorWidth
                 height: Math.max(editorFlick.height - y - 96, implicitHeight + 20)
                 text: ""
@@ -642,6 +735,11 @@ ApplicationWindow {
                     color: win.strongTextColor
                 }
                 onCursorRectangleChanged: editorFlick.ensureCursorVisible()
+                onYChanged: if (backend.focusMode) editorFlick.ensureCursorVisible()
+                onCursorPositionChanged: {
+                    if (backend.focusMode)
+                        backend.updateCursorPosition(cursorPosition);
+                }
 
                 function replaceSelectionWith(replacement) {
                     var start = Math.min(selectionStart, selectionEnd);
@@ -959,6 +1057,18 @@ ApplicationWindow {
             }
         }
 
+        MouseArea {
+            id: footerHoverArea
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: win.scaledSize(48)
+            hoverEnabled: true
+            acceptedButtons: Qt.NoButton
+            visible: backend.focusMode
+            z: 5
+        }
+
         Row {
             id: footerStatus
             anchors.left: parent.left
@@ -966,7 +1076,10 @@ ApplicationWindow {
             anchors.leftMargin: 12
             anchors.bottomMargin: 10
             spacing: 12
-            opacity: 0.55
+            opacity: backend.focusMode
+                ? (footerHoverArea.containsMouse ? 0.55 : 0)
+                : 0.55
+            Behavior on opacity { NumberAnimation { duration: 250 } }
 
             FooterIconButton {
                 objectName: "saveButton"
@@ -982,6 +1095,14 @@ ApplicationWindow {
                 iconColor: win.mutedColor
                 tooltip: "Open"
                 onClicked: backend.openDialog()
+            }
+
+            FooterIconButton {
+                objectName: "filesButton"
+                iconName: "files"
+                iconColor: win.mutedColor
+                tooltip: "Files"
+                onClicked: win.toggleSidebar()
             }
 
             Label {
@@ -1004,7 +1125,10 @@ ApplicationWindow {
             anchors.bottomMargin: 10
             text: backend.wordCount + (backend.wordCount === 1 ? " Word" : " Words")
             color: win.mutedColor
-            opacity: 0.75
+            opacity: backend.focusMode
+                ? (footerHoverArea.containsMouse ? 0.75 : 0)
+                : 0.75
+            Behavior on opacity { NumberAnimation { duration: 250 } }
             font.family: backend.fontFamily
             font.pixelSize: win.scaledSize(11)
         }
