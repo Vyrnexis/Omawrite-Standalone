@@ -19,7 +19,7 @@ Dialog {
 
     modal: true
     focus: true
-    closePolicy: Popup.CloseOnEscape
+    closePolicy: root.deleted ? Popup.NoAutoClose : Popup.CloseOnEscape
     width: Math.min(520, containerWidth - 48)
     x: Math.round((containerWidth - width) / 2)
     y: Math.round((containerHeight - height) / 2)

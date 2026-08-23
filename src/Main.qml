@@ -14,7 +14,7 @@ ApplicationWindow {
     minimumHeight: 520
     visible: true
     title: (backend.modified ? "* " : "") + backend.fileName + " - Omawrite"
-    flags: Qt.Window | Qt.FramelessWindowHint
+    flags: Qt.Window
 
     readonly property bool darkMode: backend.darkMode
     readonly property color pageColor: backend.themeBackground
@@ -36,14 +36,18 @@ ApplicationWindow {
     property bool closeConfirmed: false
     property bool searchOpen: false
     property bool sidebarOpen: false
-    property int sidebarLogicalWidth: 240
+    property int sidebarLogicalWidth: backend.sidebarWidth()
     property bool searchUpdating: false
     property var searchMatches: []
     property int searchMatchIndex: -1
     property url pendingOpenUrl
     property string pendingAction: ""
     property bool replaceOpen: false
-    property bool awaitingPendingSave: false
+    property int normalX: -1
+    property int normalY: -1
+    property int normalWidth: 1280
+    property int normalHeight: 820
+    property bool wasMaximized: false
 
     Material.theme: darkMode ? Material.Dark : Material.Light
     Material.accent: backend.themeAccent
@@ -65,12 +69,7 @@ ApplicationWindow {
     }
 
     function toggleSidebar() {
-        if (!sidebarOpen)
-            setSidebarOpen(true);
-        else if (fileSidebar.listHasFocus)
-            setSidebarOpen(false);
-        else
-            setSidebarOpen(false);
+        setSidebarOpen(!sidebarOpen);
     }
 
     onClosing: function(close) {
@@ -81,6 +80,17 @@ ApplicationWindow {
         pendingAction = "close";
         if (!unsavedChangesDialog.opened)
             unsavedChangesDialog.open();
+    }
+
+    onXChanged: if (visibility === Window.Windowed) normalX = x
+    onYChanged: if (visibility === Window.Windowed) normalY = y
+    onWidthChanged: if (visibility === Window.Windowed) normalWidth = width
+    onHeightChanged: if (visibility === Window.Windowed) normalHeight = height
+    onVisibilityChanged: function() {
+        if (win.visibility === Window.Maximized)
+            wasMaximized = true;
+        else if (win.visibility === Window.Windowed)
+            wasMaximized = false;
     }
 
     function requestOpen(url) {
@@ -125,7 +135,7 @@ ApplicationWindow {
         var matches = [];
         var query = searchField.text;
         if (query.length > 0) {
-            var haystack = editor.text.toLocaleLowerCase();
+            var haystack = editor.getText(0, editor.length).toLocaleLowerCase();
             var needle = query.toLocaleLowerCase();
             var position = 0;
             while ((position = haystack.indexOf(needle, position)) !== -1) {
@@ -189,7 +199,7 @@ ApplicationWindow {
         sequence: "Ctrl+0"
         context: Qt.ApplicationShortcut
         onActivated: {
-            backend.textScale = 1.0;
+            backend.resetTextScale();
             zoomOverlay.show();
         }
     }
@@ -351,13 +361,7 @@ ApplicationWindow {
             saveFileDialog.open();
         }
 
-        function onCloseAfterSave() {
-            win.closeConfirmed = true;
-            win.close();
-        }
-
         function onSaveSucceeded() {
-            win.awaitingPendingSave = false;
             if (win.pendingAction !== "")
                 win.completePendingAction();
         }
@@ -375,6 +379,7 @@ ApplicationWindow {
 
     Dialogs.FileDialog {
         id: openFileDialog
+        objectName: "openFileDialog"
         title: "Open File"
         fileMode: Dialogs.FileDialog.OpenFile
         nameFilters: ["Markdown files (*.md *.markdown)", "All files (*)"]
@@ -383,13 +388,12 @@ ApplicationWindow {
 
     Dialogs.FileDialog {
         id: saveFileDialog
+        objectName: "saveFileDialog"
         title: "Save File"
         fileMode: Dialogs.FileDialog.SaveFile
         nameFilters: ["Markdown files (*.md *.markdown)", "All files (*)"]
         onAccepted: backend.saveAs(selectedFile)
         onRejected: {
-            backend.fileDialogCanceled();
-            win.awaitingPendingSave = false;
             win.pendingAction = "";
         }
     }
@@ -411,7 +415,6 @@ ApplicationWindow {
         }
 
         onSaveRequested: {
-            win.awaitingPendingSave = true;
             backend.save();
         }
         onCancelRequested: win.pendingAction = ""
@@ -423,6 +426,7 @@ ApplicationWindow {
         textScale: win.textScale
         textColor: win.textColor
         strongTextColor: win.strongTextColor
+        activeButtonColor: backend.themeAccent
         containerWidth: win.width
         containerHeight: win.height
 
@@ -875,7 +879,7 @@ ApplicationWindow {
                 function insertLink() {
                     var start = Math.min(selectionStart, selectionEnd);
                     var end = Math.max(selectionStart, selectionEnd);
-                    var selected = text.slice(start, end);
+                    var selected = getText(start, end);
                     var url = backend.clipboardUrl();
                     var label = selected.length > 0 ? selected : "link text";
                     var destination = url.length > 0 ? url : "https://";
@@ -930,9 +934,9 @@ ApplicationWindow {
                         }
                         return;
                     }
-                    var lineEnd = text.indexOf("\n", cursorPosition);
-                    var rest = lineEnd < 0 ? text.slice(cursorPosition)
-                                           : text.slice(cursorPosition, lineEnd);
+                    var lineEnd = plainText.indexOf("\n", cursorPosition);
+                    var rest = lineEnd < 0 ? plainText.slice(cursorPosition)
+                                           : plainText.slice(cursorPosition, lineEnd);
                     if (/^\s*$/.test(line) && /^\s*$/.test(rest)) {
                         replaceSelectionWith("\n");
                         return;
@@ -1281,6 +1285,12 @@ ApplicationWindow {
             border.color: backend.themeAccent
             border.width: 1
             z: 100
+            Accessible.role: Accessible.Link
+            Accessible.name: editor.hoveredLinkUrl
+            activeFocusOnTab: visible
+
+            Keys.onReturnPressed: backend.openExternalUrl(editor.hoveredLinkUrl)
+            Keys.onEnterPressed: backend.openExternalUrl(editor.hoveredLinkUrl)
 
             Text {
                 id: linkTooltipText
@@ -1293,10 +1303,22 @@ ApplicationWindow {
                 elide: Text.ElideMiddle
                 verticalAlignment: Text.AlignVCenter
             }
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: backend.openExternalUrl(editor.hoveredLinkUrl)
+            }
         }
 
         Rectangle {
             id: imageTooltip
+            readonly property int previewStatus: previewLoader.item
+                ? previewLoader.item.status : Image.Null
+            readonly property real previewImplicitWidth: previewLoader.item
+                ? previewLoader.item.implicitWidth : 0
+            readonly property real previewImplicitHeight: previewLoader.item
+                ? previewLoader.item.implicitHeight : 0
             visible: editor.hoveredImageUrl !== ""
             x: {
                 var hoverPosition = editor.positionToRectangle(editor.positionAt(editor.linkHoverX, editor.linkHoverY));
@@ -1326,36 +1348,40 @@ ApplicationWindow {
                 Item {
                     id: imageContainer
                     width: parent.width
-                    height: previewImage.status === Image.Ready
-                        ? Math.min(win.scaledSize(260), Math.max(win.scaledSize(80), Math.round(previewImage.implicitHeight * width / Math.max(1, previewImage.implicitWidth))))
+                    height: imageTooltip.previewStatus === Image.Ready
+                        ? Math.min(win.scaledSize(260), Math.max(win.scaledSize(80), Math.round(imageTooltip.previewImplicitHeight * width / Math.max(1, imageTooltip.previewImplicitWidth))))
                         : 0
-                    visible: previewImage.status === Image.Ready
+                    visible: imageTooltip.previewStatus === Image.Ready
                     clip: true
 
-                    AnimatedImage {
-                        id: previewImage
+                    Loader {
+                        id: previewLoader
                         anchors.fill: parent
-                        fillMode: Image.PreserveAspectFit
-                        source: backend.resolveImageUrl(editor.hoveredImageUrl)
-                        asynchronous: true
-                        smooth: true
-                        mipmap: true
-                        playing: true
-
-                        Rectangle {
+                        active: editor.hoveredImageUrl !== ""
+                        sourceComponent: AnimatedImage {
                             anchors.fill: parent
-                            color: "transparent"
-                            border.color: win.mutedColor
-                            border.width: 1
-                            opacity: 0.25
+                            fillMode: Image.PreserveAspectFit
+                            source: backend.resolveImageUrl(editor.hoveredImageUrl)
+                            asynchronous: true
+                            smooth: true
+                            mipmap: true
+                            playing: true
                         }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "transparent"
+                        border.color: win.mutedColor
+                        border.width: 1
+                        opacity: 0.25
                     }
                 }
 
                 Label {
                     width: parent.width
-                    text: previewImage.status === Image.Error ? "Image not found / failed to load" : (previewImage.status === Image.Loading ? "Loading image..." : editor.hoveredImageUrl)
-                    color: previewImage.status === Image.Error ? "#e06c75" : win.mutedColor
+                    text: imageTooltip.previewStatus === Image.Error ? "Image not found / failed to load" : (imageTooltip.previewStatus === Image.Loading ? "Loading image..." : editor.hoveredImageUrl)
+                    color: imageTooltip.previewStatus === Image.Error ? "#e06c75" : win.mutedColor
                     font.family: "iA Writer Mono S"
                     font.pixelSize: win.scaledSize(11)
                     elide: Text.ElideMiddle
@@ -1608,12 +1634,15 @@ ApplicationWindow {
                     text: "All"
                     onClicked: {
                         if (searchField.text.length === 0) return;
+                        win.searchUpdating = true;
                         for (var i = win.searchMatches.length - 1; i >= 0; --i) {
                             var start = win.searchMatches[i];
                             EditorMutations.replaceRange(editor, start,
                                                          start + searchField.text.length,
                                                          replaceField.text);
                         }
+                        win.searchUpdating = false;
+                        backend.editorTextChanged();
                         win.updateSearch();
                     }
                 }
@@ -1651,9 +1680,15 @@ ApplicationWindow {
         if (geometry.y >= 0) y = geometry.y;
         width = geometry.width;
         height = geometry.height;
+        normalX = x;
+        normalY = y;
+        normalWidth = width;
+        normalHeight = height;
+        wasMaximized = geometry.maximized;
         if (geometry.maximized) showMaximized();
     }
 
-    Component.onDestruction: backend.saveWindowGeometry(x, y, width, height, visibility === Window.Maximized)
+    Component.onDestruction: backend.saveWindowGeometry(
+        normalX, normalY, normalWidth, normalHeight, wasMaximized)
 
 }

@@ -369,7 +369,7 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                    list.currentIndex = row.index;
+                    root.selectIndex(row.index);
                     if (row.modelData.isDir)
                         root.folderRequested(row.modelData.url);
                     else

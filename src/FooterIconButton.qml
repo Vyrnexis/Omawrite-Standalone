@@ -13,6 +13,13 @@ Item {
 
     width: 16
     height: 16
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Button
+    Accessible.name: tooltip
+
+    Keys.onReturnPressed: control.clicked()
+    Keys.onEnterPressed: control.clicked()
+    Keys.onSpacePressed: control.clicked()
 
     ToolTip.visible: hitArea.containsMouse && tooltip.length > 0
     ToolTip.text: tooltip
@@ -88,6 +95,9 @@ Item {
         height: 28
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: control.clicked()
+        onClicked: {
+            control.forceActiveFocus();
+            control.clicked();
+        }
     }
 }

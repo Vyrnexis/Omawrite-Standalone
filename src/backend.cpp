@@ -3,6 +3,7 @@
 #include <QClipboard>
 #include <QColor>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -14,8 +15,10 @@
 #include <QPrinter>
 #include <QQuickTextDocument>
 #include <QRegularExpression>
+#include <QScreen>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QStringConverter>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLockFile>
@@ -37,6 +40,14 @@ constexpr qreal typoraLineHeightPercent = 140;
 const QString lastSaveDirectorySetting = QStringLiteral("file/lastSaveDirectory");
 const QString browseDirectorySetting = QStringLiteral("file/browseDirectory");
 const QString sidebarWidthSetting = QStringLiteral("file/sidebarWidth");
+
+// Returns the platform-native Omawrite configuration directory.
+QString configurationDirectory() {
+    const QString root = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    const QString configRoot = root.isEmpty()
+        ? QDir::home().filePath(QStringLiteral(".config")) : root;
+    return QDir(configRoot).filePath(QStringLiteral("omawrite"));
+}
 
 QString Backend::normalizedLinkUrl(const QString &clipboardText) {
     QString candidate = clipboardText.trimmed();
@@ -120,7 +131,13 @@ Backend::Backend(QObject *parent) : QObject(parent) {
                     m_hasKnownFileContents = false;
                     m_lastKnownFileText.clear();
                 }
-                emit externalChangeDetected(deleted, m_modified);
+                const bool locallyModified = m_modified;
+                if (deleted) {
+                    setKnownFileContents(QByteArray(), false);
+                    setModified(true);
+                    scheduleRecovery();
+                }
+                emit externalChangeDetected(deleted, locallyModified);
             });
 
     connect(&m_folderWatcher, &QFileSystemWatcher::directoryChanged, this,
@@ -130,15 +147,15 @@ Backend::Backend(QObject *parent) : QObject(parent) {
                                           : defaultDirectory().absolutePath(),
                 false);
 
-    loadOmarchyTheme();
-    watchOmarchyTheme();
+    loadThemeConfig();
+    watchThemeConfig();
     connect(&m_themeWatcher, &QFileSystemWatcher::fileChanged, this, [this]() {
-        loadOmarchyTheme();
-        watchOmarchyTheme();
+        loadThemeConfig();
+        watchThemeConfig();
     });
     connect(&m_themeWatcher, &QFileSystemWatcher::directoryChanged, this, [this]() {
-        loadOmarchyTheme();
-        watchOmarchyTheme();
+        loadThemeConfig();
+        watchThemeConfig();
     });
 }
 
@@ -163,20 +180,26 @@ QString Backend::fileName() const {
 }
 
 void Backend::setDarkMode(bool darkMode) {
-    if (m_darkMode == darkMode)
+    if (m_systemDarkMode == darkMode)
         return;
-
-    m_darkMode = darkMode;
-    loadOmarchyTheme();
-    emit darkModeChanged();
+    m_systemDarkMode = darkMode;
+    loadThemeConfig();
 }
 
 void Backend::setTextScale(qreal textScale) {
-    if (qFuzzyCompare(m_textScale, textScale))
-        return;
+    applyTextScale(qBound<qreal>(0.5, textScale, 3.0));
+}
 
-    m_textScale = textScale;
-    emit textScaleChanged();
+// Applies desktop scaling unless the configuration supplies an explicit scale.
+void Backend::setSystemTextScale(qreal textScale) {
+    m_systemTextScale = qBound<qreal>(0.5, textScale, 3.0);
+    if (!m_hasConfiguredTextScale)
+        applyTextScale(m_systemTextScale);
+}
+
+// Restores zoom to the configured scale or the current desktop scale.
+void Backend::resetTextScale() {
+    applyTextScale(m_hasConfiguredTextScale ? m_configuredTextScale : m_systemTextScale);
 }
 
 void Backend::attachDocument(QObject *textDocument) {
@@ -185,12 +208,19 @@ void Backend::attachDocument(QObject *textDocument) {
         setStatus(QStringLiteral("Could not attach the Markdown renderer."));
         return;
     }
+    attachTextDocument(quickDocument->textDocument());
+}
 
+// Attaches the editable document and initializes highlighting, metrics, and recovery.
+void Backend::attachTextDocument(QTextDocument *document) {
+    if (!document) {
+        setStatus(QStringLiteral("Could not attach the Markdown renderer."));
+        return;
+    }
     if (m_highlighter)
         delete m_highlighter.data();
 
-    m_document = quickDocument->textDocument();
-    m_lastDocumentText = m_document->toPlainText();
+    m_document = document;
     m_highlighter = new MarkdownHighlighter(m_document);
     m_highlighter->setDarkMode(m_darkMode);
     m_highlighter->setColors(m_themeBackground, m_themeForeground, m_themeAccent);
@@ -297,7 +327,13 @@ void Backend::open(const QUrl &url) {
     }
 
     const QByteArray contents = file.readAll();
-    loadDocumentText(QString::fromUtf8(contents));
+    QStringDecoder decoder(QStringDecoder::Utf8);
+    const QString text = decoder.decode(contents);
+    if (decoder.hasError()) {
+        setStatus(QStringLiteral("Could not open %1: the file is not valid UTF-8.").arg(targetName));
+        return;
+    }
+    loadDocumentText(text);
     clearRecovery();
     setKnownFileContents(contents, true);
     setFileUrl(url);
@@ -315,26 +351,12 @@ void Backend::save() {
     saveTo(m_fileUrl);
 }
 
-void Backend::saveForClose() {
-    if (!m_modified) {
-        emit closeAfterSave();
-        return;
-    }
-
-    m_closeAfterSave = true;
-    save();
-}
-
 void Backend::saveAsDialog() {
     emit saveDialogRequested(suggestedSaveUrl());
 }
 
 void Backend::saveAs(const QUrl &url) {
     saveTo(url);
-}
-
-void Backend::fileDialogCanceled() {
-    m_closeAfterSave = false;
 }
 
 void Backend::discardRecovery() {
@@ -424,11 +446,6 @@ bool Backend::editorTextChanged() {
     if (m_loading || m_formattingTypography)
         return false;
 
-    const QString text = currentDocumentText();
-    if (text == m_lastDocumentText)
-        return false;
-    m_lastDocumentText = text;
-
     if (m_document) {
         const int blockCount = m_document->blockCount();
         if (blockCount > m_formattedBlockCount)
@@ -437,15 +454,6 @@ bool Backend::editorTextChanged() {
     }
 
     scheduleWordCount();
-    
-    const QString &baseline = m_lastKnownFileText;
-    if (m_hasKnownFileContents && text == baseline) {
-        setModified(false);
-        setStatus(QStringLiteral("Saved"));
-        clearRecovery();
-        return true;
-    }
-
     setModified(true);
     setStatus(QStringLiteral("Unsaved"));
     scheduleRecovery();
@@ -512,9 +520,18 @@ QUrl Backend::resolveImageUrl(const QString &rawUrl) const {
     if (trimmed.isEmpty())
         return {};
 
+    if (QDir::isAbsolutePath(trimmed))
+        return QUrl::fromLocalFile(QDir::cleanPath(trimmed));
+
     const QUrl parsed(trimmed);
-    if (parsed.isValid() && !parsed.scheme().isEmpty())
-        return parsed;
+    if (parsed.isValid() && !parsed.scheme().isEmpty()) {
+        const QString scheme = parsed.scheme().toLower();
+        if (scheme == QStringLiteral("http") || scheme == QStringLiteral("https")
+                || scheme == QStringLiteral("file") || scheme == QStringLiteral("qrc")) {
+            return parsed;
+        }
+        return {};
+    }
 
     if (m_fileUrl.isLocalFile()) {
         const QFileInfo docInfo(m_fileUrl.toLocalFile());
@@ -534,7 +551,7 @@ void Backend::setSearchHighlight(const QString &query, int currentMatchStart) {
 void Backend::openExternalUrl(const QUrl &url) {
     const QString scheme = url.scheme().toLower();
     if (scheme == QStringLiteral("http") || scheme == QStringLiteral("https")
-            || scheme == QStringLiteral("mailto"))
+            || scheme == QStringLiteral("ftp") || scheme == QStringLiteral("mailto"))
         QDesktopServices::openUrl(url);
 }
 
@@ -543,17 +560,37 @@ QVariantList Backend::documentHeadings() const {
     if (!m_document)
         return list;
 
-    static const QRegularExpression headingRe(QStringLiteral("^(#{1,6})\\s+(.+)$"));
+    static const QRegularExpression headingRe(
+        QStringLiteral("^ {0,3}(#{1,6})[ \\t]+(.+?)(?:[ \\t]+#+[ \\t]*)?$"));
     QTextBlock block = m_document->firstBlock();
     int lineNumber = 1;
-    bool inCodeBlock = false;
+    QChar fenceChar;
+    int fenceLength = 0;
 
     while (block.isValid()) {
         const QString text = block.text();
-        if (text.startsWith(QStringLiteral("```")))
-            inCodeBlock = !inCodeBlock;
+        int leadingSpaces = 0;
+        while (leadingSpaces < text.length() && text.at(leadingSpaces) == QLatin1Char(' '))
+            ++leadingSpaces;
+        const QString trimmed = text.mid(leadingSpaces).trimmed();
+        int markerLength = 0;
+        if (leadingSpaces <= 3 && !trimmed.isEmpty()
+                && (trimmed.front() == QLatin1Char('`') || trimmed.front() == QLatin1Char('~'))) {
+            while (markerLength < trimmed.length()
+                    && trimmed.at(markerLength) == trimmed.front()) {
+                ++markerLength;
+            }
+        }
+        if (fenceLength == 0 && markerLength >= 3) {
+            fenceChar = trimmed.front();
+            fenceLength = markerLength;
+        } else if (fenceLength > 0 && !trimmed.isEmpty() && trimmed.front() == fenceChar
+                   && markerLength >= fenceLength
+                   && trimmed.mid(markerLength).trimmed().isEmpty()) {
+            fenceLength = 0;
+        }
 
-        if (!inCodeBlock) {
+        if (fenceLength == 0) {
             const QRegularExpressionMatch match = headingRe.match(text);
             if (match.hasMatch()) {
                 const int level = match.captured(1).length();
@@ -576,10 +613,26 @@ QVariantList Backend::documentHeadings() const {
 
 QVariantMap Backend::windowGeometry() const {
     QSettings settings;
-    return {{QStringLiteral("x"), settings.value(QStringLiteral("window/x"), -1)},
-            {QStringLiteral("y"), settings.value(QStringLiteral("window/y"), -1)},
-            {QStringLiteral("width"), settings.value(QStringLiteral("window/width"), 1280)},
-            {QStringLiteral("height"), settings.value(QStringLiteral("window/height"), 820)},
+    int x = settings.value(QStringLiteral("window/x"), -1).toInt();
+    int y = settings.value(QStringLiteral("window/y"), -1).toInt();
+    const int width = qMax(720, settings.value(QStringLiteral("window/width"), 1280).toInt());
+    const int height = qMax(520, settings.value(QStringLiteral("window/height"), 820).toInt());
+    bool visible = x < 0 || y < 0;
+    const QRect stored(x, y, width, height);
+    for (const QScreen *screen : QGuiApplication::screens()) {
+        if (screen && screen->availableGeometry().intersects(stored)) {
+            visible = true;
+            break;
+        }
+    }
+    if (!visible) {
+        x = -1;
+        y = -1;
+    }
+    return {{QStringLiteral("x"), x},
+            {QStringLiteral("y"), y},
+            {QStringLiteral("width"), width},
+            {QStringLiteral("height"), height},
             {QStringLiteral("maximized"), settings.value(QStringLiteral("window/maximized"), false)}};
 }
 
@@ -614,12 +667,11 @@ void Backend::loadDocumentText(const QString &text) {
 
     m_loading = true;
     m_document->setPlainText(text);
-    m_lastDocumentText = text;
     m_loading = false;
 
     applyDocumentTypography();
     m_wordCountTimer.stop();
-    setWordCount(countWords(text));
+    setWordCount(countWords(text), text);
 }
 
 void Backend::setFileUrl(const QUrl &url) {
@@ -650,8 +702,11 @@ void Backend::setStatus(const QString &status) {
 }
 
 void Backend::saveTo(const QUrl &url) {
+    if (!m_document) {
+        setStatus(QStringLiteral("There is no document to save."));
+        return;
+    }
     if (!url.isLocalFile()) {
-        m_closeAfterSave = false;
         setStatus(QStringLiteral("Only local files can be saved."));
         return;
     }
@@ -659,7 +714,6 @@ void Backend::saveTo(const QUrl &url) {
     const QString targetName = QFileInfo(url.toLocalFile()).fileName();
     QSaveFile file(url.toLocalFile());
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        m_closeAfterSave = false;
         setStatus(QStringLiteral("Could not save %1.").arg(targetName));
         return;
     }
@@ -677,13 +731,10 @@ void Backend::saveTo(const QUrl &url) {
     // returning false (and leaving the original untouched) on any write error.
     if (!file.commit()) {
         watchCurrentFile();
-        m_closeAfterSave = false;
         setStatus(QStringLiteral("Could not write %1.").arg(targetName));
         return;
     }
 
-    const bool shouldClose = m_closeAfterSave;
-    m_closeAfterSave = false;
     setKnownFileContents(contents, true);
     setFileUrl(url);
     watchCurrentFile();
@@ -693,9 +744,6 @@ void Backend::saveTo(const QUrl &url) {
     setStatus(QStringLiteral("Saved %1").arg(fileName()));
     clearRecovery();
     emit saveSucceeded();
-
-    if (shouldClose)
-        emit closeAfterSave();
 }
 
 void Backend::scheduleRecovery() {
@@ -724,19 +772,29 @@ void Backend::writeRecovery() {
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly))
         return;
-    const QJsonObject recovery{{QStringLiteral("fileUrl"), m_fileUrl.toString()},
+    const QJsonObject recovery{{QStringLiteral("version"), 1},
+                               {QStringLiteral("savedAt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
+                               {QStringLiteral("fileUrl"), m_fileUrl.toString()},
                                {QStringLiteral("text"), currentDocumentText()}};
-    file.write(QJsonDocument(recovery).toJson(QJsonDocument::Compact));
-    file.commit();
+    const QByteArray contents = QJsonDocument(recovery).toJson(QJsonDocument::Compact);
+    if (file.write(contents) != contents.size() || !file.commit())
+        qWarning() << "Could not write recovery snapshot" << path;
 }
 
 void Backend::restoreRecovery() {
-    QFile file(recoveryPath());
+    const QString path = recoveryPath();
+    if (path.isEmpty())
+        return;
+    QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
         return;
     const QJsonDocument json = QJsonDocument::fromJson(file.readAll());
-    if (!json.isObject() || !json.object().contains(QStringLiteral("text")))
+    if (!json.isObject() || !json.object().value(QStringLiteral("text")).isString()) {
+        file.close();
+        QFile::remove(recoveryPath());
+        setStatus(QStringLiteral("Discarded an invalid recovery snapshot"));
         return;
+    }
     const QJsonObject recovery = json.object();
     loadDocumentText(recovery.value(QStringLiteral("text")).toString());
     const QUrl recoveredUrl(recovery.value(QStringLiteral("fileUrl")).toString());
@@ -753,7 +811,9 @@ void Backend::restoreRecovery() {
 
 void Backend::clearRecovery() {
     m_recoveryTimer.stop();
-    QFile::remove(recoveryPath());
+    const QString path = recoveryPath();
+    if (!path.isEmpty())
+        QFile::remove(path);
 }
 
 void Backend::watchCurrentFile() {
@@ -815,13 +875,13 @@ QVariantList Backend::folderEntries() const {
     return entries;
 }
 
-void Backend::loadOmarchyTheme() {
-    m_themeBackground = m_darkMode ? QStringLiteral("#101010") : QStringLiteral("#ffffff");
-    m_themeForeground = m_darkMode ? QStringLiteral("#eeeeee") : QStringLiteral("#222324");
-    m_themeAccent = m_darkMode ? QStringLiteral("#5584aa") : QStringLiteral("#2077b2");
-    m_themeSelection = m_darkMode ? QStringLiteral("#186a9a") : QStringLiteral("#2077b2");
+void Backend::loadThemeConfig() {
+    m_themeBackground = m_systemDarkMode ? QStringLiteral("#101010") : QStringLiteral("#ffffff");
+    m_themeForeground = m_systemDarkMode ? QStringLiteral("#eeeeee") : QStringLiteral("#222324");
+    m_themeAccent = m_systemDarkMode ? QStringLiteral("#5584aa") : QStringLiteral("#2077b2");
+    m_themeSelection = m_systemDarkMode ? QStringLiteral("#186a9a") : QStringLiteral("#2077b2");
 
-    const QString configDir = QDir::homePath() + QStringLiteral("/.config/omawrite");
+    const QString configDir = configurationDirectory();
     const QString configPath = configDir + QStringLiteral("/config.toml");
     
     // Ensure the config directory exists so the user can populate it
@@ -830,6 +890,9 @@ void Backend::loadOmarchyTheme() {
     }
 
     QString themeMode;
+    QString configuredFontFamily = QStringLiteral("iA Writer Mono S");
+    qreal configuredTextScale = m_systemTextScale;
+    bool hasConfiguredTextScale = false;
     QFile file(configPath);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QTextStream in(&file);
@@ -851,33 +914,43 @@ void Backend::loadOmarchyTheme() {
             }
 
             if (key == QStringLiteral("background")) {
-                m_themeBackground = value;
+                if (QColor(value).isValid())
+                    m_themeBackground = value;
             } else if (key == QStringLiteral("foreground")) {
-                m_themeForeground = value;
+                if (QColor(value).isValid())
+                    m_themeForeground = value;
             } else if (key == QStringLiteral("accent")) {
-                m_themeAccent = value;
+                if (QColor(value).isValid())
+                    m_themeAccent = value;
             } else if (key == QStringLiteral("selection")) {
-                m_themeSelection = value;
+                if (QColor(value).isValid())
+                    m_themeSelection = value;
             } else if (key == QStringLiteral("text_scale")) {
                 bool ok;
-                qreal scale = value.toDouble(&ok);
-                if (ok && scale > 0) {
-                    m_textScale = scale;
-                    emit textScaleChanged();
+                const qreal scale = value.toDouble(&ok);
+                if (ok && scale >= 0.5 && scale <= 3.0) {
+                    configuredTextScale = scale;
+                    hasConfiguredTextScale = true;
                 }
             } else if (key == QStringLiteral("font_family")) {
-                if (m_fontFamily != value) {
-                    m_fontFamily = value;
-                    emit fontFamilyChanged();
-                }
+                if (!value.isEmpty())
+                    configuredFontFamily = value;
             } else if (key == QStringLiteral("mode")) {
                 themeMode = value;
             }
         }
     }
 
+    m_configuredTextScale = configuredTextScale;
+    m_hasConfiguredTextScale = hasConfiguredTextScale;
+    applyTextScale(configuredTextScale);
+    if (m_fontFamily != configuredFontFamily) {
+        m_fontFamily = configuredFontFamily;
+        emit fontFamilyChanged();
+    }
+
     bool themeModeKnown = false;
-    bool themeIsDark = m_darkMode;
+    bool themeIsDark = m_systemDarkMode;
     if (themeMode == QStringLiteral("dark")) {
         themeIsDark = true;
         themeModeKnown = true;
@@ -906,12 +979,12 @@ void Backend::loadOmarchyTheme() {
     emit themeColorsChanged();
 }
 
-void Backend::watchOmarchyTheme() {
+void Backend::watchThemeConfig() {
     const QStringList watched = m_themeWatcher.files() + m_themeWatcher.directories();
     if (!watched.isEmpty())
         m_themeWatcher.removePaths(watched);
 
-    const QString configDir = QDir::homePath() + QStringLiteral("/.config/omawrite");
+    const QString configDir = configurationDirectory();
     const QString configPath = configDir + QStringLiteral("/config.toml");
 
     if (QDir(configDir).exists())
@@ -953,32 +1026,41 @@ int Backend::countWords(const QString &text) {
 
 QString Backend::sanitizedEntryName(const QString &text) {
     QString name = text.section(QLatin1Char('\n'), 0, 0).trimmed();
-    name.replace(QRegularExpression(QStringLiteral("[/\\x00-\\x1f\\x7f]")),
+    name.replace(QLatin1Char('\\'), QLatin1Char('-'));
+    name.replace(QRegularExpression(QStringLiteral("[<>:\"/|?*\\x00-\\x1f\\x7f]")),
                  QStringLiteral("-"));
     name = name.left(120).trimmed();
+    while (name.endsWith(QLatin1Char('.')) || name.endsWith(QLatin1Char(' ')))
+        name.chop(1);
     if (name.isEmpty() || name == QStringLiteral(".") || name == QStringLiteral(".."))
         name = QStringLiteral("Untitled");
+    static const QRegularExpression reservedWindowsName(
+        QStringLiteral("^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\..*)?$"),
+        QRegularExpression::CaseInsensitiveOption);
+    if (reservedWindowsName.match(name).hasMatch())
+        name.prepend(QLatin1Char('_'));
     return name;
 }
 
 QString Backend::suggestedFileName(const QString &text) {
     QString name = sanitizedEntryName(text);
-    if (!name.endsWith(QStringLiteral(".md"), Qt::CaseInsensitive))
+    if (!name.endsWith(QStringLiteral(".md"), Qt::CaseInsensitive)
+            && !name.endsWith(QStringLiteral(".markdown"), Qt::CaseInsensitive))
         name += QStringLiteral(".md");
     return name;
 }
 
-void Backend::setWordCount(int words) {
-    const QString text = currentDocumentText();
+void Backend::setWordCount(int words, const QString &text) {
     const int characters = text.length();
     
     int paragraphs = 0;
-    if (!text.isEmpty()) {
-        const QStringList lines = text.split(QLatin1Char('\n'));
-        for (const QString &line : lines) {
-            if (!line.trimmed().isEmpty())
-                ++paragraphs;
-        }
+    bool inParagraph = false;
+    const QStringList lines = text.split(QLatin1Char('\n'));
+    for (const QString &line : lines) {
+        const bool hasText = !line.trimmed().isEmpty();
+        if (hasText && !inParagraph)
+            ++paragraphs;
+        inParagraph = hasText;
     }
 
     if (m_wordCount == words && m_characterCount == characters && m_paragraphCount == paragraphs)
@@ -991,11 +1073,25 @@ void Backend::setWordCount(int words) {
 }
 
 void Backend::refreshWordCount() {
-    setWordCount(countWords(currentDocumentText()));
+    const QString text = currentDocumentText();
+    setWordCount(countWords(text), text);
+    if (m_hasKnownFileContents && text == m_lastKnownFileText) {
+        setModified(false);
+        setStatus(QStringLiteral("Saved"));
+        clearRecovery();
+    }
 }
 
 void Backend::scheduleWordCount() {
     m_wordCountTimer.start();
+}
+
+// Updates the effective interface scale and emits only when it changes.
+void Backend::applyTextScale(qreal textScale) {
+    if (qFuzzyCompare(m_textScale, textScale))
+        return;
+    m_textScale = textScale;
+    emit textScaleChanged();
 }
 
 void Backend::applyDocumentTypography() {

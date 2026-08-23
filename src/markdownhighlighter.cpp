@@ -6,6 +6,28 @@
 #include <QFontMetricsF>
 #include <QTextDocument>
 
+namespace {
+// Removes Markdown backslash escapes from a parsed link destination.
+QString unescapeDestination(const QString &value) {
+    QString result;
+    result.reserve(value.length());
+    bool escaped = false;
+    for (const QChar ch : value) {
+        if (escaped) {
+            result.append(ch);
+            escaped = false;
+        } else if (ch == QLatin1Char('\\')) {
+            escaped = true;
+        } else {
+            result.append(ch);
+        }
+    }
+    if (escaped)
+        result.append(QLatin1Char('\\'));
+    return result;
+}
+}
+
 MarkdownHighlighter::MarkdownHighlighter(QTextDocument *document)
     : QSyntaxHighlighter(document) {
     rebuildFormats();
@@ -179,55 +201,71 @@ void MarkdownHighlighter::highlightBlock(const QString &text) {
     int state = previousBlockState();
     if (state == -1) state = 0;
 
-    static const QRegularExpression codeBlockStartRe(QStringLiteral("^```\\s*(\\w*)"));
+    static const QRegularExpression codeBlockStartRe(
+        QStringLiteral("^ {0,3}(`{3,}|~{3,})[ \\t]*([^ \\t]*)"));
     if (state == 0) {
-        QRegularExpressionMatch match = codeBlockStartRe.match(text);
+        const QRegularExpressionMatch match = codeBlockStartRe.match(text);
         if (match.hasMatch()) {
-            QString lang = match.captured(1).toLower();
+            const QString fence = match.captured(1);
+            const QString lang = match.captured(2).toLower();
+            int languageState = 1;
             if (lang == QLatin1String("bash") || lang == QLatin1String("sh")) {
-                setCurrentBlockState(2);
+                languageState = 2;
             } else if (lang == QLatin1String("nim")) {
-                setCurrentBlockState(3);
+                languageState = 3;
             } else if (lang == QLatin1String("python") || lang == QLatin1String("py")) {
-                setCurrentBlockState(4);
+                languageState = 4;
             } else if (lang == QLatin1String("toml")) {
-                setCurrentBlockState(5);
+                languageState = 5;
             } else if (lang == QLatin1String("json")) {
-                setCurrentBlockState(6);
+                languageState = 6;
             } else if (lang == QLatin1String("c")) {
-                setCurrentBlockState(7);
+                languageState = 7;
             } else if (lang == QLatin1String("cpp") || lang == QLatin1String("c++")) {
-                setCurrentBlockState(8);
+                languageState = 8;
             } else if (lang == QLatin1String("js") || lang == QLatin1String("javascript")) {
-                setCurrentBlockState(9);
+                languageState = 9;
             } else if (lang == QLatin1String("ruby") || lang == QLatin1String("rb")) {
-                setCurrentBlockState(10);
-            } else {
-                setCurrentBlockState(1);
+                languageState = 10;
             }
+            const int fenceKind = fence.startsWith(QLatin1Char('~')) ? 100 : 0;
+            setCurrentBlockState(languageState + fenceKind + qMin(99, fence.length()) * 1000);
             setFormat(0, text.length() + 1, m_blockCodeFormat);
             
             // Hide the '```'
-            setFormat(0, 3, m_hiddenMarkerFormat);
+            setFormat(match.capturedStart(1), fence.length(), m_hiddenMarkerFormat);
             // Format the language tag if present
-            if (match.capturedLength(1) > 0) {
-                setFormat(match.capturedStart(1), match.capturedLength(1), m_codeLanguageLabelFormat);
+            if (match.capturedLength(2) > 0) {
+                setFormat(match.capturedStart(2), match.capturedLength(2), m_codeLanguageLabelFormat);
             }
-            
+            applyFocusDimming(text);
+            highlightSearch(text);
             return;
         }
     } else if (state > 0) {
-        if (text.startsWith(QStringLiteral("```"))) {
+        const int fenceLength = state / 1000;
+        const bool tildeFence = ((state / 100) % 10) == 1;
+        const QChar fenceChar = tildeFence ? QLatin1Char('~') : QLatin1Char('`');
+        const QString trimmed = text.trimmed();
+        int closingLength = 0;
+        while (closingLength < trimmed.length() && trimmed.at(closingLength) == fenceChar)
+            ++closingLength;
+        const bool closesFence = closingLength >= fenceLength
+            && trimmed.mid(closingLength).trimmed().isEmpty();
+        if (closesFence) {
             setCurrentBlockState(0);
             setFormat(0, text.length() + 1, m_blockCodeFormat);
             setFormat(0, text.length(), m_invisibleTextFormat);
+            applyFocusDimming(text);
+            highlightSearch(text);
             return;
         } else {
             setCurrentBlockState(state);
             setFormat(0, text.length() + 1, m_blockCodeFormat);
             CodeHighlighter::Formats formats = {m_keywordFormat, m_stringFormat, m_commentFormat};
-            CodeHighlighter::highlight(text, state, this, formats);
+            CodeHighlighter::highlight(text, state % 100, this, formats);
         }
+        applyFocusDimming(text);
         highlightSearch(text);
         return;
     }
@@ -237,7 +275,8 @@ void MarkdownHighlighter::highlightBlock(const QString &text) {
         highlightMarkers(text);
         if (text.contains(QLatin1Char('`')) || text.contains(QLatin1Char('*'))
             || text.contains(QLatin1Char('_')) || text.contains(QLatin1Char('['))
-            || text.contains(QLatin1Char('~'))) {
+            || text.contains(QLatin1Char('~')) || text.contains(QLatin1Char('<'))
+            || text.contains(QLatin1Char('!'))) {
             highlightInline(text);
         }
     }
@@ -310,7 +349,8 @@ void MarkdownHighlighter::highlightMarkers(const QString &text) {
 
 void MarkdownHighlighter::highlightInline(const QString &text) {
     if (text.contains(QLatin1Char('`'))) {
-        static const QRegularExpression codeRe(QStringLiteral("`([^`]+)`"));
+        static const QRegularExpression codeRe(
+            QStringLiteral("(?<!\\\\)(`+)(.+?)\\1"));
         QRegularExpressionMatchIterator codeMatches = codeRe.globalMatch(text);
         while (codeMatches.hasNext()) {
             const QRegularExpressionMatch match = codeMatches.next();
@@ -355,38 +395,64 @@ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const
         return Span{int(match.capturedStart(group)), int(match.capturedLength(group))};
     };
 
-    static const QRegularExpression boldRe(QStringLiteral("(\\*\\*|__)(.+?)(\\1)"));
+    QList<Span> codeSpans;
+    static const QRegularExpression protectedCodeRe(
+        QStringLiteral("(?<!\\\\)(`+)(.+?)\\1"));
+    QRegularExpressionMatchIterator protectedCodeMatches = protectedCodeRe.globalMatch(text);
+    while (protectedCodeMatches.hasNext())
+        codeSpans.append(span(protectedCodeMatches.next(), 0));
+    const auto overlapsCode = [&codeSpans](const QRegularExpressionMatch &match) {
+        const int start = match.capturedStart(0);
+        const int end = start + match.capturedLength(0);
+        for (const Span &code : codeSpans) {
+            if (start < code.start + code.length && end > code.start)
+                return true;
+        }
+        return false;
+    };
+
+    static const QRegularExpression boldRe(
+        QStringLiteral("(?<!\\\\)(\\*\\*|__)(.+?)(\\1)"));
     QRegularExpressionMatchIterator boldMatches = boldRe.globalMatch(text);
     while (boldMatches.hasNext()) {
         const QRegularExpressionMatch match = boldMatches.next();
+        if (overlapsCode(match))
+            continue;
         markup.append({InlineKind::Bold, span(match, 2),
                        {span(match, 1), span(match, 3)}});
     }
 
     static const QRegularExpression italicRe(
-        QStringLiteral("(?<!\\*)\\*([^*\\n]+)\\*(?!\\*)|(?<!_)_([^_\\n]+)_(?!_)"));
+        QStringLiteral("(?<![\\\\*])\\*([^*\\n]+)\\*(?!\\*)|(?<![\\\\_])_([^_\\n]+)_(?!_)"));
     QRegularExpressionMatchIterator italicMatches = italicRe.globalMatch(text);
     while (italicMatches.hasNext()) {
         const QRegularExpressionMatch match = italicMatches.next();
+        if (overlapsCode(match))
+            continue;
         const Span whole = span(match, 0);
         const int contentIndex = match.capturedStart(1) >= 0 ? 1 : 2;
         markup.append({InlineKind::Italic, span(match, contentIndex),
                        {{whole.start, 1}, {whole.start + whole.length - 1, 1}}});
     }
 
-    static const QRegularExpression strikethroughRe(QStringLiteral("(~~)(.+?)(~~)"));
+    static const QRegularExpression strikethroughRe(
+        QStringLiteral("(?<!\\\\)(~~)(.+?)(~~)"));
     QRegularExpressionMatchIterator strikethroughMatches = strikethroughRe.globalMatch(text);
     while (strikethroughMatches.hasNext()) {
         const QRegularExpressionMatch match = strikethroughMatches.next();
+        if (overlapsCode(match))
+            continue;
         markup.append({InlineKind::Strikethrough, span(match, 2),
                        {span(match, 1), span(match, 3)}});
     }
 
     static const QRegularExpression linkRe(
-        QStringLiteral("(?<!!)\\[([^\\]]+)\\]\\(((?:\\\\.|[^)])+)\\)"));
+        QStringLiteral("(?<![!\\\\])\\[([^\\]]+)\\]\\(((?:\\\\.|[^()\\s]|\\([^()]*\\))+)(?:\\s+(?:\"[^\"]*\"|'[^']*'|\\([^)]*\\)))?\\)"));
     QRegularExpressionMatchIterator linkMatches = linkRe.globalMatch(text);
     while (linkMatches.hasNext()) {
         const QRegularExpressionMatch match = linkMatches.next();
+        if (overlapsCode(match))
+            continue;
         const Span whole = span(match, 0);
         const Span content = span(match, 1);
         const int contentEnd = content.start + content.length;
@@ -397,10 +463,12 @@ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const
     }
 
     static const QRegularExpression imageRe(
-        QStringLiteral("!\\[([^\\]]*)\\]\\(((?:\\\\.|[^)])+)\\)"));
+        QStringLiteral("(?<!\\\\)!\\[([^\\]]*)\\]\\(((?:\\\\.|[^()\\s]|\\([^()]*\\))+)(?:\\s+(?:\"[^\"]*\"|'[^']*'|\\([^)]*\\)))?\\)"));
     QRegularExpressionMatchIterator imageMatches = imageRe.globalMatch(text);
     while (imageMatches.hasNext()) {
         const QRegularExpressionMatch match = imageMatches.next();
+        if (overlapsCode(match))
+            continue;
         const Span whole = span(match, 0);
         const Span content = span(match, 1);
         const int contentEnd = content.start + content.length;
@@ -416,6 +484,8 @@ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const
     QRegularExpressionMatchIterator htmlImgMatches = htmlImgRe.globalMatch(text);
     while (htmlImgMatches.hasNext()) {
         const QRegularExpressionMatch match = htmlImgMatches.next();
+        if (overlapsCode(match))
+            continue;
         const Span whole = span(match, 0);
         markup.append({InlineKind::Image, whole,
                        {{0, 0}, {0, 0}},
@@ -436,7 +506,7 @@ QString MarkdownHighlighter::linkUrlAt(const QString &text, int position) {
                 || position >= item.content.start + item.content.length) {
             continue;
         }
-        return text.mid(item.destination.start, item.destination.length);
+        return unescapeDestination(text.mid(item.destination.start, item.destination.length));
     }
     return {};
 }
@@ -452,7 +522,7 @@ QString MarkdownHighlighter::imageUrlAt(const QString &text, int position) {
                 || position >= item.content.start + item.content.length) {
             continue;
         }
-        return text.mid(item.destination.start, item.destination.length);
+        return unescapeDestination(text.mid(item.destination.start, item.destination.length));
     }
     return {};
 }
@@ -480,5 +550,3 @@ void MarkdownHighlighter::applyFocusDimming(const QString &text) {
         pos += run;
     }
 }
-
-

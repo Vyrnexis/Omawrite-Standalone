@@ -4,6 +4,9 @@
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickStyle>
+#include <QStandardPaths>
+#include <QTextBlock>
+#include <QTextDocument>
 
 #include "backend.h"
 #include "markdownhighlighter.h"
@@ -18,6 +21,9 @@ private slots:
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
                            m_settingsDirectory.path());
+        const QString configRoot = m_settingsDirectory.filePath(QStringLiteral("config"));
+        QVERIFY(QDir().mkpath(configRoot));
+        QVERIFY(qputenv("XDG_CONFIG_HOME", configRoot.toUtf8()));
     }
 
     void countsWords() {
@@ -42,6 +48,12 @@ private slots:
         QCOMPARE(Backend::suggestedFileName(QString()), QStringLiteral("Untitled.md"));
         QCOMPARE(Backend::suggestedFileName(QStringLiteral("Already.md")),
                  QStringLiteral("Already.md"));
+        QCOMPARE(Backend::suggestedFileName(QStringLiteral("Already.markdown")),
+                 QStringLiteral("Already.markdown"));
+        QCOMPARE(Backend::suggestedFileName(QStringLiteral("A\\B:*?")),
+                 QStringLiteral("A-B---.md"));
+        QCOMPARE(Backend::suggestedFileName(QStringLiteral("CON")),
+                 QStringLiteral("_CON.md"));
     }
 
     void findsInlineMarkdownRanges() {
@@ -62,6 +74,13 @@ private slots:
         QCOMPARE(MarkdownHighlighter::imageUrlAt(sample, 38), QStringLiteral("image.png"));
         QCOMPARE(MarkdownHighlighter::linkUrlAt(sample, 38), QString());
         QCOMPARE(MarkdownHighlighter::imageUrlAt(sample, 70), QStringLiteral("https://example.com/art.jpg"));
+
+        const QString edgeCases = QStringLiteral(
+            "\\*literal* `**code**` [nested](https://example.com/a_(b) \"title\")");
+        const auto edgeMarkup = MarkdownHighlighter::inlineMarkup(edgeCases);
+        QCOMPARE(edgeMarkup.size(), 1);
+        QCOMPARE(MarkdownHighlighter::linkUrlAt(edgeCases, 24),
+                 QStringLiteral("https://example.com/a_(b)"));
     }
 
     void loadsCurrentStandaloneConfig() {
@@ -75,8 +94,8 @@ private slots:
         } restoreHome{originalHome};
         QVERIFY(qputenv("HOME", homeDirectory.path().toUtf8()));
 
-        const QString configDirectory = homeDirectory.path()
-            + QStringLiteral("/.config/omawrite");
+        const QString configDirectory = QStandardPaths::writableLocation(
+            QStandardPaths::GenericConfigLocation) + QStringLiteral("/omawrite");
         QVERIFY(QDir().mkpath(configDirectory));
 
         QFile colorsFile(configDirectory + QStringLiteral("/config.toml"));
@@ -87,7 +106,8 @@ private slots:
             "selection = \"#445566\"\n"
             "background = \"#fefefe\"\n"
             "foreground = \"#101010\"\n"
-            "text_scale = 1.25\n");
+            "text_scale = 1.25\n"
+            "font_family = \"Configured Mono\"\n");
         QCOMPARE(colorsFile.write(palette), qint64(palette.size()));
         colorsFile.close();
 
@@ -97,7 +117,21 @@ private slots:
         QCOMPARE(backend.themeAccent(), QStringLiteral("#112233"));
         QCOMPARE(backend.themeSelection(), QStringLiteral("#445566"));
         QCOMPARE(backend.textScale(), 1.25);
+        QCOMPARE(backend.fontFamily(), QStringLiteral("Configured Mono"));
         QVERIFY(!backend.darkMode());
+
+        backend.setSystemTextScale(2.0);
+        backend.setDarkMode(true);
+        QVERIFY(!backend.darkMode());
+        QCOMPARE(backend.textScale(), 1.25);
+        backend.setTextScale(2.5);
+        backend.resetTextScale();
+        QCOMPARE(backend.textScale(), 1.25);
+        QVERIFY(colorsFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        colorsFile.close();
+        QTRY_COMPARE(backend.textScale(), 2.0);
+        QTRY_COMPARE(backend.fontFamily(), QStringLiteral("iA Writer Mono S"));
+        QTRY_VERIFY(backend.darkMode());
     }
 
     void ignoresFileWatcherEventsForSavedContents() {
@@ -106,6 +140,9 @@ private slots:
 
         const QString path = directory.filePath(QStringLiteral("first-save.md"));
         Backend backend;
+        QTextDocument document;
+        document.setPlainText(QStringLiteral("saved contents"));
+        backend.attachTextDocument(&document);
         QSignalSpy externalChangeSpy(&backend, &Backend::externalChangeDetected);
 
         backend.saveAs(QUrl::fromLocalFile(path));
@@ -113,6 +150,7 @@ private slots:
 
         QFile sameContents(path);
         QVERIFY(sameContents.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(sameContents.write("saved contents"), qint64(14));
         sameContents.close();
         QTest::qWait(100);
         QCOMPARE(externalChangeSpy.count(), 0);
@@ -198,10 +236,16 @@ private slots:
         QSignalSpy saveDialogSpy(&backend, &Backend::saveDialogRequested);
         QVERIFY(QMetaObject::invokeMethod(saveButton, "clicked"));
         QCOMPARE(saveDialogSpy.count(), 1);
+        QObject *saveDialog = window->findChild<QObject *>(QStringLiteral("saveFileDialog"));
+        QVERIFY(saveDialog);
+        QVERIFY(QMetaObject::invokeMethod(saveDialog, "close"));
 
         QSignalSpy openDialogSpy(&backend, &Backend::openDialogRequested);
         QVERIFY(QMetaObject::invokeMethod(openButton, "clicked"));
         QCOMPARE(openDialogSpy.count(), 1);
+        QObject *openDialog = window->findChild<QObject *>(QStringLiteral("openFileDialog"));
+        QVERIFY(openDialog);
+        QVERIFY(QMetaObject::invokeMethod(openDialog, "close"));
     }
 
     void scalesTextWithDesktopTextSize() {
@@ -245,6 +289,8 @@ private slots:
 
         const QString savedPath = saveDirectory.filePath(QStringLiteral("first.md"));
         Backend savedDocument;
+        QTextDocument document;
+        savedDocument.attachTextDocument(&document);
         savedDocument.saveAs(QUrl::fromLocalFile(savedPath));
 
         Backend nextDocument;
@@ -265,6 +311,107 @@ private slots:
         fallbackDocument.saveAsDialog();
         const QUrl fallbackUrl = fallbackDialogSpy.takeFirst().constFirst().toUrl();
         QCOMPARE(QFileInfo(fallbackUrl.toLocalFile()).absolutePath(), QDir::homePath());
+    }
+
+    // Verifies external deletion immediately protects the in-memory document.
+    void protectsDocumentAfterExternalDeletion() {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("deleted.md"));
+
+        Backend backend;
+        QTextDocument document;
+        document.setPlainText(QStringLiteral("important text"));
+        backend.attachTextDocument(&document);
+        backend.saveAs(QUrl::fromLocalFile(path));
+        QVERIFY(!backend.modified());
+
+        QSignalSpy externalChangeSpy(&backend, &Backend::externalChangeDetected);
+        QVERIFY(QFile::remove(path));
+        QTRY_COMPARE(externalChangeSpy.count(), 1);
+        QVERIFY(backend.modified());
+        QCOMPARE(externalChangeSpy.constFirst().at(0).toBool(), true);
+        QCOMPARE(externalChangeSpy.constFirst().at(1).toBool(), false);
+    }
+
+    // Verifies persistent sidebar width is exposed to the next backend instance.
+    void restoresSidebarWidth() {
+        Backend first;
+        first.saveSidebarWidth(387);
+        Backend second;
+        QCOMPARE(second.sidebarWidth(), 387);
+    }
+
+    // Verifies statistics treat adjacent non-empty lines as one paragraph.
+    void countsParagraphsAndEmptyReadingTime() {
+        Backend backend;
+        QTextDocument document;
+        backend.attachTextDocument(&document);
+        QCOMPARE(backend.readingTimeMinutes(), 0);
+
+        document.setPlainText(QStringLiteral("first line\nwrapped line\n\nsecond paragraph"));
+        QVERIFY(backend.editorTextChanged());
+        QTRY_COMPARE(backend.paragraphCount(), 2);
+        QCOMPARE(backend.wordCount(), 6);
+    }
+
+    // Verifies C++ and tilde fences retain language and heading boundaries.
+    void recognizesFencedCodeAndHeadings() {
+        QTextDocument highlighted(QStringLiteral("```c++\nclass Example {};\n```"));
+        MarkdownHighlighter highlighter(&highlighted);
+        highlighter.rehighlight();
+        QCOMPARE(highlighted.firstBlock().userState() % 100, 8);
+
+        Backend backend;
+        QTextDocument outlined(QStringLiteral("# Visible\n~~~cpp\n# Hidden\n~~~\n   ## Also visible"));
+        backend.attachTextDocument(&outlined);
+        const QVariantList headings = backend.documentHeadings();
+        QCOMPARE(headings.size(), 2);
+        QCOMPARE(headings.at(0).toMap().value(QStringLiteral("title")).toString(),
+                 QStringLiteral("Visible"));
+        QCOMPARE(headings.at(1).toMap().value(QStringLiteral("title")).toString(),
+                 QStringLiteral("Also visible"));
+    }
+
+    // Verifies the backend refuses to create an empty file without an editor document.
+    void rejectsSaveWithoutDocument() {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("missing-document.md"));
+        Backend backend;
+        backend.saveAs(QUrl::fromLocalFile(path));
+        QVERIFY(!QFileInfo::exists(path));
+        QCOMPARE(backend.status(), QStringLiteral("There is no document to save."));
+    }
+
+    // Verifies invalid UTF-8 never replaces or later corrupts the active document.
+    void rejectsInvalidUtf8() {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("invalid.md"));
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(QByteArray(1, char(0xff))), qint64(1));
+        file.close();
+
+        Backend backend;
+        QTextDocument document(QStringLiteral("safe contents"));
+        backend.attachTextDocument(&document);
+        backend.open(QUrl::fromLocalFile(path));
+        QCOMPARE(document.toPlainText(), QStringLiteral("safe contents"));
+        QVERIFY(backend.fileUrl().isEmpty());
+        QVERIFY(backend.status().contains(QStringLiteral("not valid UTF-8")));
+    }
+
+    // Verifies geometry from a removed monitor is not restored off-screen.
+    void rejectsOffscreenWindowGeometry() {
+        Backend backend;
+        backend.saveWindowGeometry(999999, 999999, 1280, 820, false);
+        const QVariantMap geometry = backend.windowGeometry();
+        QCOMPARE(geometry.value(QStringLiteral("x")).toInt(), -1);
+        QCOMPARE(geometry.value(QStringLiteral("y")).toInt(), -1);
+        QCOMPARE(geometry.value(QStringLiteral("width")).toInt(), 1280);
+        QCOMPARE(geometry.value(QStringLiteral("height")).toInt(), 820);
     }
 
 private:

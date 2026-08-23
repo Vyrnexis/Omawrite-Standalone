@@ -44,6 +44,7 @@ public:
     ~Backend() override;
 
     void setParentWindow(QWindow *window);
+    void attachTextDocument(QTextDocument *document);
 
     QUrl fileUrl() const { return m_fileUrl; }
     QString fileName() const;
@@ -53,11 +54,12 @@ public:
     int wordCount() const { return m_wordCount; }
     int characterCount() const { return m_characterCount; }
     int paragraphCount() const { return m_paragraphCount; }
-    int readingTimeMinutes() const { return std::max(1, (m_wordCount + 199) / 200); }
+    int readingTimeMinutes() const { return (m_wordCount + 199) / 200; }
     bool darkMode() const { return m_darkMode; }
     void setDarkMode(bool darkMode);
     qreal textScale() const { return m_textScale; }
     void setTextScale(qreal textScale);
+    void setSystemTextScale(qreal textScale);
     QString fontFamily() const { return m_fontFamily; }
     QString themeBackground() const { return m_themeBackground; }
     QString themeForeground() const { return m_themeForeground; }
@@ -83,10 +85,8 @@ public:
     Q_INVOKABLE void saveSidebarWidth(int width);
     Q_INVOKABLE void open(const QUrl &url);
     Q_INVOKABLE void save();
-    Q_INVOKABLE void saveForClose();
     Q_INVOKABLE void saveAsDialog();
     Q_INVOKABLE void saveAs(const QUrl &url);
-    Q_INVOKABLE void fileDialogCanceled();
     Q_INVOKABLE void discardRecovery();
     Q_INVOKABLE void reloadFromDisk();
     Q_INVOKABLE void keepExternalVersion();
@@ -103,6 +103,7 @@ public:
     Q_INVOKABLE void openExternalUrl(const QUrl &url);
     Q_INVOKABLE QVariantMap windowGeometry() const;
     Q_INVOKABLE void saveWindowGeometry(int x, int y, int width, int height, bool maximized);
+    Q_INVOKABLE void resetTextScale();
     Q_INVOKABLE void toggleFocusMode();
     Q_INVOKABLE void updateCursorPosition(int position);
     Q_INVOKABLE QVariantList documentHeadings() const;
@@ -116,7 +117,6 @@ signals:
     void textScaleChanged();
     void fontFamilyChanged();
     void themeColorsChanged();
-    void closeAfterSave();
     void openDialogRequested();
     void saveDialogRequested(const QUrl &suggestedUrl);
     void saveSucceeded();
@@ -135,7 +135,7 @@ private:
     void applyFolder(const QString &path, bool remember);
     void watchCurrentFolder();
     QString currentDocumentText() const;
-    void setWordCount(int words);
+    void setWordCount(int words, const QString &text);
     void refreshWordCount();
     void scheduleWordCount();
     void applyDocumentTypography();
@@ -147,8 +147,9 @@ private:
     QString recoveryPath() const;
     void setKnownFileContents(const QByteArray &contents, bool known);
     void watchCurrentFile();
-    void loadOmarchyTheme();
-    void watchOmarchyTheme();
+    void loadThemeConfig();
+    void watchThemeConfig();
+    void applyTextScale(qreal textScale);
 
     QUrl m_fileUrl;
     bool m_modified = false;
@@ -157,10 +158,13 @@ private:
     int m_characterCount = 0;
     int m_paragraphCount = 0;
     bool m_darkMode = true;
+    bool m_systemDarkMode = true;
     qreal m_textScale = 1.0;
+    qreal m_systemTextScale = 1.0;
+    qreal m_configuredTextScale = 1.0;
+    bool m_hasConfiguredTextScale = false;
     QString m_fontFamily = QStringLiteral("iA Writer Mono S");
     bool m_loading = false;
-    bool m_closeAfterSave = false;
     bool m_formattingTypography = false;
     int m_formattedBlockCount = 0;
     int m_lastChangePos = 0;
@@ -173,7 +177,6 @@ private:
     QPointer<QTextDocument> m_document;
     QPointer<QWindow> m_parentWindow;
     QPointer<MarkdownHighlighter> m_highlighter;
-    QString m_lastDocumentText;
     QByteArray m_lastKnownFileContents;
     QString m_lastKnownFileText;
     bool m_hasKnownFileContents = false;

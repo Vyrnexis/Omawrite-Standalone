@@ -2,7 +2,7 @@
 
 A minimal, distraction-free Markdown writing application built with Qt Quick and C++.
 
-Originally based on [omacom-io/omawrite](https://github.com/omacom-io/omawrite) (built for the Omarchy desktop shell), **Omawrite Standalone** is fully decoupled from desktop environment D-Bus dependencies, enabling it to run natively across Linux distributions and any platform supporting Qt 6.
+Originally based on [omacom-io/omawrite](https://github.com/omacom-io/omawrite), **Omawrite Standalone** uses native Qt window controls and optional Linux desktop-portal integration. Other Qt 6 platforms fall back to Qt's system appearance support without requiring D-Bus.
 
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-24-08" src="https://github.com/user-attachments/assets/4e930c0d-edda-4046-b444-a59eff523329" />
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-23-23" src="https://github.com/user-attachments/assets/8ced7c26-961b-4ded-b263-84403001a951" />
@@ -12,7 +12,7 @@ Originally based on [omacom-io/omawrite](https://github.com/omacom-io/omawrite) 
 ## Features
 
 ### Distraction-Free Writing & Ergonomics
-- **Frameless Typography:** Clean, borderless writing canvas with typewriter scrolling and focus mode (`Ctrl+Shift+T`).
+- **Native Standalone Window:** Standard movable, resizable window chrome with a clean writing canvas, typewriter scrolling, and focus mode (`Ctrl+Shift+T`).
 - **Auto-Pairing & Selection Wrapping:** Automatically pairs brackets `()`, `[]`, `{}`, quotes `""`, `''`, and wraps highlighted text.
 - **Interactive Task Lists:** Smart `- [ ]` and `- [x]` task continuation on `Enter`, with instant toggling via `Ctrl+Shift+C`.
 - **Smart Return:** Automatically continues bulleted, numbered, and blockquote lists; double-return cleanly terminates lists.
@@ -23,7 +23,7 @@ Originally based on [omacom-io/omawrite](https://github.com/omacom-io/omawrite) 
 - **Document Heading HUD (`Ctrl+Shift+O`):** Popover outline of all document headings (`#` through `######`) with instant top-aligned scrolling.
 - **File Explorer Sidebar (`Ctrl+E`):** Toggleable folder sidebar with inline document creation and directory navigation.
 - **Image & Animated GIF Hover Previews:** Hovering over Markdown image links (`![alt](url)`) or HTML `<img src="...">` tags displays a thumbnail popover supporting local files, remote URLs, and looping animated GIFs.
-- **Link Previews:** Hovering over Markdown URLs displays full link targets with click-to-open support.
+- **Link Previews:** Hovering over Markdown URLs displays full link targets; click or press Enter to open them.
 
 ### Syntax Highlighting & Rendering
 - **GitHub-Flavored Code Blocks:** Seamless backtick hiding for clean reading, with syntax highlighting for:
@@ -102,11 +102,12 @@ selection  = "#33467c"
 git clone https://github.com/Vyrnexis/Omawrite-Standalone.git
 cd Omawrite-Standalone
 
-# Build release binary into ./build/
-./bin/build
+# Build an optimized release binary into ./bin/
+qmake6 omawrite.pro
+make -j"$(nproc)"
 
 # Run
-./build/omawrite
+./bin/omawrite
 ```
 
 ---

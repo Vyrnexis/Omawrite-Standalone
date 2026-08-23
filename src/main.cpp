@@ -6,16 +6,38 @@
 #include <QQmlContext>
 #include <QQmlError>
 #include <QQuickStyle>
+#include <QSettings>
 #include <QUrl>
+#include <QVariant>
 #include <QWindow>
 #include <QFile>
 
 #include "backend.h"
 #include "systemtheme.h"
 
+namespace {
+// Copies upstream settings once so existing standalone users keep their workspace preferences.
+void migrateLegacySettings() {
+    QSettings current;
+    if (!current.allKeys().isEmpty())
+        return;
+    QSettings legacy(QStringLiteral("Omacom"), QStringLiteral("omawrite"));
+    const QStringList keys{
+        QStringLiteral("file/lastSaveDirectory"), QStringLiteral("file/browseDirectory"),
+        QStringLiteral("file/sidebarWidth"), QStringLiteral("window/x"),
+        QStringLiteral("window/y"), QStringLiteral("window/width"),
+        QStringLiteral("window/height"), QStringLiteral("window/maximized")};
+    for (const QString &key : keys) {
+        if (legacy.contains(key))
+            current.setValue(key, legacy.value(key));
+    }
+}
+}
+
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
-    app.setApplicationName(QStringLiteral("omawrite"));
+    app.setApplicationName(QStringLiteral("omawrite-standalone"));
+    app.setApplicationDisplayName(QStringLiteral("Omawrite Standalone"));
     app.setDesktopFileName(QStringLiteral("omawrite"));
     app.setWindowIcon(QIcon::fromTheme(QStringLiteral("omawrite")));
 
@@ -23,8 +45,9 @@ int main(int argc, char *argv[]) {
     QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/iAWriterMonoS-Italic.ttf"));
     QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/iAWriterMonoS-Bold.ttf"));
     QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/iAWriterMonoS-BoldItalic.ttf"));
-    app.setOrganizationName(QStringLiteral("Omacom"));
-    app.setOrganizationDomain(QStringLiteral("omacom.io"));
+    app.setOrganizationName(QStringLiteral("Vyrnexis"));
+    app.setOrganizationDomain(QStringLiteral("vyrnexis.github.io"));
+    migrateLegacySettings();
 
     QQuickStyle::setStyle(QStringLiteral("Material"));
 
@@ -45,13 +68,15 @@ int main(int argc, char *argv[]) {
         scaled.setPointSizeF(basePointSize * textScale);
         app.setFont(scaled);
     };
-    applyInterfaceFont(systemTheme.textScale());
-
-    backend.setTextScale(systemTheme.textScale());
+    backend.setSystemTextScale(systemTheme.textScale());
+    applyInterfaceFont(backend.textScale());
+    QObject::connect(&backend, &Backend::textScaleChanged, &app,
+                     [&backend, applyInterfaceFont]() {
+        applyInterfaceFont(backend.textScale());
+    });
     QObject::connect(&systemTheme, &SystemTheme::textScaleChanged, &backend,
-                     [&backend, applyInterfaceFont](qreal textScale) {
-        applyInterfaceFont(textScale);
-        backend.setTextScale(textScale);
+                     [&backend](qreal textScale) {
+        backend.setSystemTextScale(textScale);
     });
 
     QQmlApplicationEngine engine;
@@ -72,8 +97,15 @@ int main(int argc, char *argv[]) {
     backend.setParentWindow(qobject_cast<QWindow *>(engine.rootObjects().constFirst()));
 
     const QStringList args = app.arguments();
-    if (args.size() > 1 && !backend.modified())
-        backend.open(QUrl::fromLocalFile(args.at(1)));
+    if (args.size() > 1) {
+        const QUrl requestedFile = QUrl::fromLocalFile(args.at(1));
+        if (backend.modified()) {
+            QMetaObject::invokeMethod(engine.rootObjects().constFirst(), "requestOpen",
+                                      Q_ARG(QVariant, QVariant::fromValue(requestedFile)));
+        } else {
+            backend.open(requestedFile);
+        }
+    }
 
     return app.exec();
 }
