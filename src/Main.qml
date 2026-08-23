@@ -1077,7 +1077,7 @@ ApplicationWindow {
                 var targetY = mappedPosition.y - height - 8;
                 return targetY >= 0 ? targetY : mappedPosition.y + hoverPosition.height + 8;
             }
-            width: Math.min(Math.max(win.scaledSize(180), previewImage.implicitWidth > 0 ? previewImage.implicitWidth + 16 : win.scaledSize(220)), Math.min(win.scaledSize(360), editorFlick.contentItem.width - 24))
+            width: Math.min(win.scaledSize(420), editorFlick.contentItem.width - 24)
             height: previewColumn.implicitHeight + 16
             radius: 6
             color: backend.themeBackground
@@ -1091,22 +1091,31 @@ ApplicationWindow {
                 anchors.margins: 8
                 spacing: 6
 
-                Image {
-                    id: previewImage
+                Item {
+                    id: imageContainer
                     width: parent.width
-                    height: Math.min(win.scaledSize(200), implicitHeight > 0 && implicitWidth > 0 ? Math.round(implicitHeight * width / implicitWidth) : win.scaledSize(140))
-                    fillMode: Image.PreserveAspectFit
-                    source: backend.resolveImageUrl(editor.hoveredImageUrl)
-                    asynchronous: true
+                    height: previewImage.status === Image.Ready
+                        ? Math.min(win.scaledSize(260), Math.max(win.scaledSize(80), Math.round(previewImage.implicitHeight * width / Math.max(1, previewImage.implicitWidth))))
+                        : 0
+                    visible: previewImage.status === Image.Ready
                     clip: true
-                    visible: status === Image.Ready
 
-                    Rectangle {
+                    Image {
+                        id: previewImage
                         anchors.fill: parent
-                        color: "transparent"
-                        border.color: win.mutedColor
-                        border.width: 1
-                        opacity: 0.3
+                        fillMode: Image.PreserveAspectFit
+                        source: backend.resolveImageUrl(editor.hoveredImageUrl)
+                        asynchronous: true
+                        smooth: true
+                        mipmap: true
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "transparent"
+                            border.color: win.mutedColor
+                            border.width: 1
+                            opacity: 0.25
+                        }
                     }
                 }
 
