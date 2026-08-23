@@ -1,11 +1,11 @@
 # Maintainer: David Heinemeier Hansson <david@hey.com>
 
-pkgname=omawrite
+pkgname=omawrite-standalone
 pkgver=0.1.0
 pkgrel=1
-pkgdesc='Dead-simple Markdown writing app built with Qt Quick'
+pkgdesc='Minimal, distraction-free standalone Markdown writing application built with Qt Quick'
 arch=('x86_64')
-url='https://github.com/omacom-io/omawrite'
+url='https://github.com/Vyrnexis/Omawrite-Standalone'
 license=('MIT')
 install='omawrite.install'
 depends=('qt6-base' 'qt6-declarative' 'xdg-desktop-portal')
