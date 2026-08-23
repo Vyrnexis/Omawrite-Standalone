@@ -1091,6 +1091,15 @@ ApplicationWindow {
                                 event.accepted = true;
                                 return;
                             }
+
+                            // If typing a backtick when already preceded by a backtick (e.g. creating ```),
+                            // do not auto-pair so that ``` fence blocks can be typed naturally.
+                            if (openChar === "`") {
+                                var prevChar = cursorPosition > 0 ? getText(cursorPosition - 1, cursorPosition) : "";
+                                if (prevChar === "`")
+                                    return; // Let TextEdit handle raw backtick insertion
+                            }
+
                             if (openChar === closeChar && cursorPosition < length
                                     && getText(cursorPosition, cursorPosition + 1) === closeChar) {
                                 cursorPosition = cursorPosition + 1;
