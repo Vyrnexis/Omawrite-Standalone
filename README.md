@@ -1,97 +1,116 @@
-# Omawrite-Standalone
+# Omawrite Standalone
 
 A minimal, distraction-free Markdown writing application built with Qt Quick and C++.
 
-This is a fork of the original Omawrite editor. The original project was built exclusively for the Omarchy desktop environment and relied on its D-Bus services for theming and configuration. This fork decouples the editor from those native desktop dependencies, allowing it to be compiled and run as a standalone application on any Linux distribution or any operating system that supports Qt 6.
+Originally based on [omacom-io/omawrite](https://github.com/omacom-io/omawrite) (built for the Omarchy desktop shell), **Omawrite Standalone** is fully decoupled from desktop environment D-Bus dependencies, enabling it to run natively across Linux distributions and any platform supporting Qt 6.
 
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-24-08" src="https://github.com/user-attachments/assets/4e930c0d-edda-4046-b444-a59eff523329" />
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-23-23" src="https://github.com/user-attachments/assets/8ced7c26-961b-4ded-b263-84403001a951" />
 
-## Standalone Features & Enhancements
+---
 
-- **Distro-Independent:** Fully decoupled from Omarchy D-Bus scaling and theming services.
-- **Custom Configuration:** Supports live-reloading via a standard `~/.config/omawrite/config.toml` file.
-- **Custom Themes & Fonts:** Allows custom hex colors for background, foreground, accents, and selections, as well as custom font families.
-- **Distraction-Free UI:** Native OS title bars have been stripped away for a frameless writing experience.
-- **Dynamic Zooming HUD:** Zoom in and out dynamically using `Ctrl++` and `Ctrl+-`, with a transient heads-up display.
-- **Auto-Pairing & Selection Wrapping:** Typing brackets `()`, `[]`, `{}`, quotes `""`, `''`, or `` ` `` automatically pairs matching characters or wraps selected text.
-- **Interactive Task Lists:** Smart `- [ ]` and `- [x]` task list continuation on `Enter`, with instant checkbox toggling via `Ctrl+Shift+C`.
-- **Extended Writing Statistics HUD:** Hovering over the footer word count reveals a detailed HUD showing total words, character count, paragraph count, and estimated reading time.
-- **Document Heading Navigation HUD:** Pressing `Ctrl+Shift+O` opens a structured popover of all Markdown headings (`#` through `######`) to jump across sections in long documents.
-- **Image & GIF Hover Preview HUD:** Hovering over Markdown image syntax (`![alt](path/or/url)`) or HTML `<img src="...">` tags renders an interactive preview card with aspect-ratio fitting, supporting local files, remote URLs, and animated GIF playback.
-- **Robust Syntax Highlighting:** Includes GitHub-style code blocks with seamless backtick hiding, native syntax highlighting for Bash, Nim, Python, C/C++, JSON, TOML, JavaScript, and Ruby, and proper rendering of inline markdown formatting in Qt 6 RichText mode.
-- **Upstream Integrations:** Manually ported upstream enhancements including:
-  - [PR #8](https://github.com/omacom-io/omawrite/pull/8): Markdown link URLs on hover
-  - [PR #9](https://github.com/omacom-io/omawrite/pull/9): Fix false unsaved changes
-  - [PR #12](https://github.com/omacom-io/omawrite/pull/12): Smart Return line breaks
-  - [PR #13](https://github.com/omacom-io/omawrite/pull/13): Robust new file handling
-  - [PR #15](https://github.com/omacom-io/omawrite/pull/15): Strikethrough formatting with smart toggle logic
-  - [PR #17](https://github.com/omacom-io/omawrite/pull/17): Focus mode with paragraph dimming (`Ctrl+Shift+T`)
-  - [PR #18](https://github.com/omacom-io/omawrite/pull/18): Prevent editor clipping in narrow windows
-  - [PR #22](https://github.com/omacom-io/omawrite/pull/22): Toggleable file sidebar (`Ctrl+E`)
+## Features
 
-## Build and Install
+### Distraction-Free Writing & Ergonomics
+- **Frameless Typography:** Clean, borderless writing canvas with typewriter scrolling and focus mode (`Ctrl+Shift+T`).
+- **Auto-Pairing & Selection Wrapping:** Automatically pairs brackets `()`, `[]`, `{}`, quotes `""`, `''`, and wraps highlighted text.
+- **Interactive Task Lists:** Smart `- [ ]` and `- [x]` task continuation on `Enter`, with instant toggling via `Ctrl+Shift+C`.
+- **Smart Return:** Automatically continues bulleted, numbered, and blockquote lists; double-return cleanly terminates lists.
+- **Dynamic Text Scaling HUD:** Seamless zooming (`Ctrl++` / `Ctrl+-` / `Ctrl+0`) with a floating scale indicator.
+- **Writing Statistics HUD:** Real-time word counter with a hover card displaying character count, paragraph count, and estimated reading time.
 
-### Requirements
+### Navigation & Media
+- **Document Heading HUD (`Ctrl+Shift+O`):** Popover outline of all document headings (`#` through `######`) with instant top-aligned scrolling.
+- **File Explorer Sidebar (`Ctrl+E`):** Toggleable folder sidebar with inline document creation and directory navigation.
+- **Image & Animated GIF Hover Previews:** Hovering over Markdown image links (`![alt](url)`) or HTML `<img src="...">` tags displays a thumbnail popover supporting local files, remote URLs, and looping animated GIFs.
+- **Link Previews:** Hovering over Markdown URLs displays full link targets with click-to-open support.
 
-- Qt 6 libraries: `qt6-base`, `qt6-declarative`, `qt6-quickcontrols2`
-- `qmake` (Qt 6)
-- A C++17 compatible compiler (e.g., `clang++` or `g++`)
-- `make`
+### Syntax Highlighting & Rendering
+- **GitHub-Flavored Code Blocks:** Seamless backtick hiding for clean reading, with syntax highlighting for:
+  - Bash / Shell
+  - C / C++
+  - JavaScript
+  - JSON
+  - Nim
+  - Python
+  - Ruby
+  - TOML
+- **RichText Inline Formatting:** Bold (`Ctrl+B`), Italic (`Ctrl+I`), Strikethrough (`Ctrl+Shift+X`), and Links (`Ctrl+K`).
 
-### Building from Source
+---
 
-1. Clone the repository and navigate into the project directory.
-2. Run the provided build script (which automatically detects `qmake` or `qmake6` and compiles the project into a `build/` directory):
-   ```bash
-   ./bin/build
-   ```
-3. Run the compiled binary:
-   ```bash
-   ./build/omawrite
-   ```
+## Configuration & Theming
 
-## Configuration
-
-Upon the first run, the application will create a configuration file at `~/.config/omawrite/config.toml`. You can edit this file to customize the editor in real time without restarting:
+Omawrite Standalone supports live hot-reloading via `~/.config/omawrite/config.toml` without requiring an application restart.
 
 ```toml
 # Omawrite Custom Theme & Configuration
 
-# Text scaling factor. 1.0 is default.
+# Text scaling factor (1.0 is default)
 text_scale = 1.0
 
-# Font family. The default is "iA Writer Mono S".
-# font_family = "iA Writer Mono S"
+# Font family (default: "iA Writer Mono S")
+font_family = "iA Writer Mono S"
 
 # --- Tokyo Night Theme Example ---
-# background = "#1a1b26"
-# foreground = "#c0caf5"
-# accent = "#7aa2f7"
-# selection = "#33467C"
+background = "#1a1b26"
+foreground = "#c0caf5"
+accent     = "#7aa2f7"
+selection  = "#33467c"
 ```
 
-## Shortcuts
+---
 
-- `Ctrl+S` saves. Unsaved documents use the XDG desktop portal file picker.
-- `Ctrl+Shift+S` saves as.
-- `Ctrl+O` opens a Markdown file.
-- `Ctrl+E` toggles the folder sidebar.
-- `Ctrl+Shift+O` opens document heading navigation.
-- `Ctrl+N` opens a new Omawrite window.
-- `Ctrl+Q` or `Ctrl+W` closes the current window.
-- `Ctrl++` / `Ctrl+-` dynamically zooms the text scale in and out.
-- `Ctrl+0` resets the text scale to 1.0.
-- `Ctrl+Z`, `Ctrl+Shift+Z`, and `Ctrl+Y` handle undo and redo.
-- `Super+F` or `F11` toggles fullscreen. 
-- `Ctrl+F` searches the document. Use `Enter` or `Ctrl+G` for the next match and `Shift+Enter` for the previous match.
-- `Ctrl+H` opens find and replace.
-- `Ctrl+B`, `Ctrl+I`, and `Ctrl+Shift+X` toggle bold, italic, and strikethrough Markdown. `Ctrl+K` inserts a link.
-- `Ctrl+Shift+C` toggles task list checkboxes (`- [ ]` / `- [x]`).
-- `Ctrl+Shift+T` toggles focus mode (typewriter centering, paragraph dimming).
-- `Ctrl+?` displays the keyboard shortcut reference HUD.
+## Keyboard Shortcuts
 
-## License
+| Shortcut | Action |
+| :--- | :--- |
+| `Ctrl+S` | Save Document |
+| `Ctrl+Shift+S` | Save As |
+| `Ctrl+O` | Open File |
+| `Ctrl+E` | Toggle Folder Sidebar |
+| `Ctrl+Shift+O` | Document Heading Navigation HUD |
+| `Ctrl+Shift+T` | Toggle Focus Mode (Typewriter Centering) |
+| `Ctrl+Shift+C` | Toggle Task Checkbox (`- [ ]` / `- [x]`) |
+| `Ctrl+B` | Toggle Bold (`**text**`) |
+| `Ctrl+I` | Toggle Italic (`*text*`) |
+| `Ctrl+Shift+X` | Toggle Strikethrough (`~~text~~`) |
+| `Ctrl+K` | Insert Markdown Link |
+| `Ctrl+F` | Find in Document (`Enter` / `Shift+Enter` for next/prev) |
+| `Ctrl+H` | Find and Replace |
+| `Ctrl++` / `Ctrl+-` | Zoom In / Out |
+| `Ctrl+0` | Reset Zoom (100%) |
+| `F11` / `Super+F` | Toggle Fullscreen |
+| `Ctrl+N` | Open New Window |
+| `Ctrl+P` | Print Document |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / Redo |
+| `Ctrl+?` | Display Keyboard Shortcut HUD |
+| `Ctrl+Q` / `Ctrl+W` | Quit / Close Window |
 
-The bundled `iA Writer Mono` font is under the SIL Open Font License 1.1; see `fonts/OFL.txt`. 
-The font is copyright Information Architects Inc. and based on IBM Plex, copyright IBM Corp.
+---
+
+## Building from Source
+
+### Prerequisites
+- Qt 6 libraries (`qt6-base`, `qt6-declarative`, `qt6-quickcontrols2`)
+- `qmake` or `qmake6`
+- C++17 compatible compiler (`g++` or `clang++`)
+- `make`
+
+### Compilation
+```bash
+git clone https://github.com/Vyrnexis/Omawrite-Standalone.git
+cd Omawrite-Standalone
+
+# Build release binary into ./build/
+./bin/build
+
+# Run
+./build/omawrite
+```
+
+---
+
+## Upstream & Acknowledgements
+- Forked from [omacom-io/omawrite](https://github.com/omacom-io/omawrite).
+- The bundled `iA Writer Mono` font is licensed under the SIL Open Font License 1.1 (see `fonts/OFL.txt`), copyright Information Architects Inc., based on IBM Plex (copyright IBM Corp.).
