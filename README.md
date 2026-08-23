@@ -9,33 +9,29 @@ Originally based on [omacom-io/omawrite](https://github.com/omacom-io/omawrite),
 
 ---
 
-## Features
+## Features & Enhancements
 
-### Distraction-Free Writing & Ergonomics
-- **Native Standalone Window:** Standard movable, resizable window chrome with a clean writing canvas, typewriter scrolling, and focus mode (`Ctrl+Shift+T`).
-- **Auto-Pairing & Selection Wrapping:** Automatically pairs brackets `()`, `[]`, `{}`, quotes `""`, `''`, and wraps highlighted text.
+### Ported Upstream Pull Requests
+We have ported and integrated key upstream pull requests from [omacom-io/omawrite](https://github.com/omacom-io/omawrite/pulls):
+- **[PR #8](https://github.com/omacom-io/omawrite/pull/8): Markdown link URLs on hover** — Hovering over Markdown links shows destination targets with click-to-open support.
+- **[PR #9](https://github.com/omacom-io/omawrite/pull/9): Fix false unsaved changes** — Prevents false-positive modified dirty state on unmodified documents.
+- **[PR #12](https://github.com/omacom-io/omawrite/pull/12): Smart Return line breaks** — Automatically continues numbered, bulleted, and blockquote lists on `Enter`.
+- **[PR #13](https://github.com/omacom-io/omawrite/pull/13): Robust new file handling** — Clean file lifecycle handling across new windows and uncommitted buffers.
+- **[PR #15](https://github.com/omacom-io/omawrite/pull/15): Strikethrough formatting** — Adds `Ctrl+Shift+X` markdown strikethrough (`~~text~~`) with smart wrap/unwrap logic.
+- **[PR #17](https://github.com/omacom-io/omawrite/pull/17): Focus mode** — Adds typewriter scrolling and paragraph dimming via `Ctrl+Shift+T`.
+- **[PR #18](https://github.com/omacom-io/omawrite/pull/18): Viewport clamp** — Prevents editor clipping and horizontal text overflow in narrow window sizes.
+- **[PR #22](https://github.com/omacom-io/omawrite/pull/22): File explorer sidebar** — Adds collapsible folder file tree view via `Ctrl+E`.
+
+### Standalone Exclusive Features
+- **Distro-Independent & Portal Theming:** Native desktop integration via standard XDG desktop portals or standalone config without requiring Omarchy D-Bus services.
+- **Document Heading Navigation HUD (`Ctrl+Shift+O`):** Popover outline of all document headings (`#` through `######`) with instant top-aligned scrolling.
+- **Image & Animated GIF Hover Previews:** Hovering over Markdown images (`![alt](url)`) or HTML `<img src="...">` tags displays a scaled popover supporting local files, remote URLs, and looping animated GIFs.
+- **Auto-Pairing & Selection Wrapping:** Automatically pairs brackets `()`, `[]`, `{}`, quotes `""`, `''`, and wraps highlighted selections without interfering with triple-backtick fences.
 - **Interactive Task Lists:** Smart `- [ ]` and `- [x]` task continuation on `Enter`, with instant toggling via `Ctrl+Shift+C`.
-- **Smart Return:** Automatically continues bulleted, numbered, and blockquote lists; double-return cleanly terminates lists.
-- **Dynamic Text Scaling HUD:** Seamless zooming (`Ctrl++` / `Ctrl+-` / `Ctrl+0`) with a floating scale indicator.
-- **Writing Statistics HUD:** Real-time word counter with a hover card displaying character count, paragraph count, and estimated reading time.
-
-### Navigation & Media
-- **Document Heading HUD (`Ctrl+Shift+O`):** Popover outline of all document headings (`#` through `######`) with instant top-aligned scrolling.
-- **File Explorer Sidebar (`Ctrl+E`):** Toggleable folder sidebar with inline document creation and directory navigation.
-- **Image & Animated GIF Hover Previews:** Hovering over Markdown image links (`![alt](url)`) or HTML `<img src="...">` tags displays a thumbnail popover supporting local files, remote URLs, and looping animated GIFs.
-- **Link Previews:** Hovering over Markdown URLs displays full link targets; click or press Enter to open them.
-
-### Syntax Highlighting & Rendering
-- **GitHub-Flavored Code Blocks:** Seamless backtick hiding for clean reading, with syntax highlighting for:
-  - Bash / Shell
-  - C / C++
-  - JavaScript
-  - JSON
-  - Nim
-  - Python
-  - Ruby
-  - TOML
-- **RichText Inline Formatting:** Bold (`Ctrl+B`), Italic (`Ctrl+I`), Strikethrough (`Ctrl+Shift+X`), and Links (`Ctrl+K`).
+- **Extended Writing Statistics HUD:** Hovering over the bottom-right word count reveals a detailed card with word count, character count, paragraph count, and reading time.
+- **Dynamic Text Zooming HUD:** Zoom in and out dynamically (`Ctrl++` / `Ctrl+-` / `Ctrl+0`) with a transient visual scale overlay.
+- **Live TOML Theming & Custom Fonts:** Supports live-reloading colors and fonts via `~/.config/omawrite/config.toml`.
+- **Syntax Highlighting for 8 Languages:** Native code block syntax highlighting for Bash, C, C++, JavaScript, JSON, Nim, Python, Ruby, and TOML.
 
 ---
 
