@@ -23,6 +23,9 @@ class Backend : public QObject {
     Q_PROPERTY(bool modified READ modified NOTIFY modifiedChanged)
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
     Q_PROPERTY(int wordCount READ wordCount NOTIFY wordCountChanged)
+    Q_PROPERTY(int characterCount READ characterCount NOTIFY wordCountChanged)
+    Q_PROPERTY(int paragraphCount READ paragraphCount NOTIFY wordCountChanged)
+    Q_PROPERTY(int readingTimeMinutes READ readingTimeMinutes NOTIFY wordCountChanged)
     Q_PROPERTY(bool darkMode READ darkMode WRITE setDarkMode NOTIFY darkModeChanged)
     Q_PROPERTY(qreal textScale READ textScale WRITE setTextScale NOTIFY textScaleChanged)
     Q_PROPERTY(QString fontFamily READ fontFamily NOTIFY fontFamilyChanged)
@@ -48,6 +51,9 @@ public:
     bool modified() const { return m_modified; }
     QString status() const { return m_status; }
     int wordCount() const { return m_wordCount; }
+    int characterCount() const { return m_characterCount; }
+    int paragraphCount() const { return m_paragraphCount; }
+    int readingTimeMinutes() const { return std::max(1, (m_wordCount + 199) / 200); }
     bool darkMode() const { return m_darkMode; }
     void setDarkMode(bool darkMode);
     qreal textScale() const { return m_textScale; }
@@ -147,6 +153,8 @@ private:
     bool m_modified = false;
     QString m_status;
     int m_wordCount = 0;
+    int m_characterCount = 0;
+    int m_paragraphCount = 0;
     bool m_darkMode = true;
     qreal m_textScale = 1.0;
     QString m_fontFamily = QStringLiteral("iA Writer Mono S");

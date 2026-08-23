@@ -933,10 +933,24 @@ QString Backend::suggestedFileName(const QString &text) {
 }
 
 void Backend::setWordCount(int words) {
-    if (m_wordCount == words)
+    const QString text = currentDocumentText();
+    const int characters = text.length();
+    
+    int paragraphs = 0;
+    if (!text.isEmpty()) {
+        const QStringList lines = text.split(QLatin1Char('\n'));
+        for (const QString &line : lines) {
+            if (!line.trimmed().isEmpty())
+                ++paragraphs;
+        }
+    }
+
+    if (m_wordCount == words && m_characterCount == characters && m_paragraphCount == paragraphs)
         return;
 
     m_wordCount = words;
+    m_characterCount = characters;
+    m_paragraphCount = paragraphs;
     emit wordCountChanged();
 }
 

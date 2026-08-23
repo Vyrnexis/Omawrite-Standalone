@@ -241,6 +241,12 @@ ApplicationWindow {
     }
 
     Shortcut {
+        sequence: "Ctrl+Shift+C"
+        context: Qt.WindowShortcut
+        onActivated: editor.toggleTaskItemAtCurrentLine()
+    }
+
+    Shortcut {
         sequence: "Ctrl+?"
         context: Qt.ApplicationShortcut
         onActivated: shortcutsDialog.open()
@@ -419,7 +425,7 @@ ApplicationWindow {
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+P  Print\nCtrl+Shift+T  Focus Mode\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
+            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+Shift+C  Toggle Task Checkbox\nCtrl+K  Link\nCtrl+P  Print\nCtrl+Shift+T  Focus Mode\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
             lineHeight: 1.5
         }
     }
@@ -787,6 +793,16 @@ ApplicationWindow {
                         replaceSelectionWith("\n");
                         return;
                     }
+                    var taskMatch = line.match(/^(\s*)([-+*])\s+\[([ xX])\]\s*(.*)$/);
+                    if (taskMatch) {
+                        if (taskMatch[4].length === 0) {
+                            EditorMutations.replaceRange(editor, lineStart,
+                                                         cursorPosition, "\n");
+                        } else {
+                            replaceSelectionWith("\n" + taskMatch[1] + taskMatch[2] + " [ ] ");
+                        }
+                        return;
+                    }
                     var match = line.match(/^(\s*)([-+*]|\d+[.)]|>+)\s+(.*)$/);
                     if (match) {
                         if (match[3].length === 0) {
@@ -916,6 +932,40 @@ ApplicationWindow {
                     return true;
                 }
 
+                function toggleTaskItemAtCurrentLine() {
+                    var plainText = getText(0, length).replace(/[\u2028\u2029]/g, "\n");
+                    var lineStart = plainText.lastIndexOf("\n", cursorPosition - 1) + 1;
+                    var lineEnd = plainText.indexOf("\n", cursorPosition);
+                    if (lineEnd < 0) lineEnd = plainText.length;
+                    var line = plainText.slice(lineStart, lineEnd);
+
+                    var checkedMatch = line.match(/^(\s*[-+*]\s+)\[[xX]\]/);
+                    if (checkedMatch) {
+                        var target = lineStart + checkedMatch[1].length;
+                        EditorMutations.replaceRange(editor, target, target + 3, "[ ]");
+                        return true;
+                    }
+
+                    var uncheckedMatch = line.match(/^(\s*[-+*]\s+)\[ \]/);
+                    if (uncheckedMatch) {
+                        var target = lineStart + uncheckedMatch[1].length;
+                        EditorMutations.replaceRange(editor, target, target + 3, "[x]");
+                        return true;
+                    }
+
+                    var bulletMatch = line.match(/^(\s*[-+*]\s+)/);
+                    if (bulletMatch) {
+                        var target = lineStart + bulletMatch[1].length;
+                        EditorMutations.replaceRange(editor, target, target, "[ ] ");
+                        return true;
+                    }
+
+                    var indentMatch = line.match(/^(\s*)/);
+                    var indent = indentMatch ? indentMatch[1] : "";
+                    EditorMutations.replaceRange(editor, lineStart, lineStart + indent.length, indent + "- [ ] ");
+                    return true;
+                }
+
                 property string hoveredLinkUrl: ""
                 property string hoveredImageUrl: ""
                 property real linkHoverX: 0
@@ -984,22 +1034,81 @@ ApplicationWindow {
                     if (returnKey && !commandModifier) {
                         smartReturn(event.modifiers & Qt.ShiftModifier);
                         event.accepted = true;
-                    } else if (!commandModifier && event.key === Qt.Key_Backspace
-                               && deleteParagraphBreakBehindCursor()) {
-                        event.accepted = true;
+                        return;
+                    } else if (!commandModifier && event.key === Qt.Key_Backspace) {
+                        if (selectionStart === selectionEnd && cursorPosition > 0 && cursorPosition < length) {
+                            var beforeChar = getText(cursorPosition - 1, cursorPosition);
+                            var afterChar = getText(cursorPosition, cursorPosition + 1);
+                            if ((beforeChar === "(" && afterChar === ")")
+                                    || (beforeChar === "[" && afterChar === "]")
+                                    || (beforeChar === "{" && afterChar === "}")
+                                    || (beforeChar === "\"" && afterChar === "\"")
+                                    || (beforeChar === "'" && afterChar === "'")
+                                    || (beforeChar === "`" && afterChar === "`")) {
+                                remove(cursorPosition - 1, cursorPosition + 1);
+                                cursorPosition = cursorPosition - 1;
+                                event.accepted = true;
+                                return;
+                            }
+                        }
+                        if (deleteParagraphBreakBehindCursor()) {
+                            event.accepted = true;
+                            return;
+                        }
                     } else if (!commandModifier && !(event.modifiers & Qt.ShiftModifier)
                                && event.key === Qt.Key_Right) {
                         moveCursorVisibly(1);
                         event.accepted = true;
+                        return;
                     } else if (!commandModifier && !(event.modifiers & Qt.ShiftModifier)
                                && event.key === Qt.Key_Left) {
                         moveCursorVisibly(-1);
                         event.accepted = true;
+                        return;
                     } else if (!commandModifier
                                && (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp)) {
                         movePage(event.key === Qt.Key_PageDown ? 1 : -1,
                                  event.modifiers & Qt.ShiftModifier);
                         event.accepted = true;
+                        return;
+                    }
+
+                    if (!commandModifier && event.text.length === 1) {
+                        var ch = event.text;
+                        var pairs = {
+                            "(": ")",
+                            "[": "]",
+                            "{": "}",
+                            "\"": "\"",
+                            "'": "'",
+                            "`": "`"
+                        };
+                        if (pairs[ch]) {
+                            var openChar = ch;
+                            var closeChar = pairs[ch];
+                            if (selectionStart !== selectionEnd) {
+                                wrapSelection(openChar, closeChar);
+                                event.accepted = true;
+                                return;
+                            }
+                            if (openChar === closeChar && cursorPosition < length
+                                    && getText(cursorPosition, cursorPosition + 1) === closeChar) {
+                                cursorPosition = cursorPosition + 1;
+                                event.accepted = true;
+                                return;
+                            }
+                            var pos = cursorPosition;
+                            insert(pos, openChar + closeChar);
+                            cursorPosition = pos + 1;
+                            event.accepted = true;
+                            return;
+                        }
+                        if ((ch === ")" || ch === "]" || ch === "}") && cursorPosition < length
+                                && getText(cursorPosition, cursorPosition + 1) === ch) {
+                            cursorPosition = cursorPosition + 1;
+                            event.accepted = true;
+                            return;
+                        }
                     }
                 }
 
@@ -1193,19 +1302,70 @@ ApplicationWindow {
             }
         }
 
-        Label {
+        Item {
+            id: wordCountContainer
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             anchors.rightMargin: 12
-            anchors.bottomMargin: 10
-            text: backend.wordCount + (backend.wordCount === 1 ? " Word" : " Words")
-            color: win.mutedColor
+            anchors.bottomMargin: 8
+            width: wordCountLabel.implicitWidth + 8
+            height: wordCountLabel.implicitHeight + 8
             opacity: backend.focusMode
                 ? (footerHoverArea.containsMouse ? 0.75 : 0)
                 : 0.75
             Behavior on opacity { NumberAnimation { duration: 250 } }
-            font.family: backend.fontFamily
-            font.pixelSize: win.scaledSize(11)
+
+            Label {
+                id: wordCountLabel
+                anchors.centerIn: parent
+                text: backend.wordCount + (backend.wordCount === 1 ? " Word" : " Words")
+                color: win.mutedColor
+                font.family: backend.fontFamily
+                font.pixelSize: win.scaledSize(11)
+            }
+
+            MouseArea {
+                id: statsHoverArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+            }
+        }
+
+        Rectangle {
+            id: statsTooltip
+            visible: statsHoverArea.containsMouse
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.rightMargin: 12
+            anchors.bottomMargin: win.scaledSize(36)
+            width: statsColumn.implicitWidth + 24
+            height: statsColumn.implicitHeight + 20
+            radius: 6
+            color: backend.themeBackground
+            border.color: backend.themeAccent
+            border.width: 1
+            z: 100
+
+            Column {
+                id: statsColumn
+                anchors.centerIn: parent
+                spacing: 4
+
+                Label {
+                    text: backend.wordCount + (backend.wordCount === 1 ? " word" : " words") + "  •  " + backend.characterCount + " characters"
+                    color: backend.themeForeground
+                    font.family: "iA Writer Mono S"
+                    font.pixelSize: win.scaledSize(12)
+                }
+
+                Label {
+                    text: backend.paragraphCount + (backend.paragraphCount === 1 ? " paragraph" : " paragraphs") + "  •  " + backend.readingTimeMinutes + " min read"
+                    color: win.mutedColor
+                    font.family: "iA Writer Mono S"
+                    font.pixelSize: win.scaledSize(11)
+                }
+            }
         }
 
 

@@ -14,6 +14,9 @@ This is a fork of the original Omawrite editor. The original project was built e
 - **Custom Themes & Fonts:** Allows custom hex colors for background, foreground, accents, and selections, as well as custom font families.
 - **Distraction-Free UI:** Native OS title bars have been stripped away for a frameless writing experience.
 - **Dynamic Zooming HUD:** Zoom in and out dynamically using `Ctrl++` and `Ctrl+-`, with a transient heads-up display.
+- **Auto-Pairing & Selection Wrapping:** Typing brackets `()`, `[]`, `{}`, quotes `""`, `''`, or `` ` `` automatically pairs matching characters or wraps selected text.
+- **Interactive Task Lists:** Smart `- [ ]` and `- [x]` task list continuation on `Enter`, with instant checkbox toggling via `Ctrl+Shift+C`.
+- **Extended Writing Statistics HUD:** Hovering over the footer word count reveals a detailed HUD showing total words, character count, paragraph count, and estimated reading time.
 - **Image & GIF Hover Preview HUD:** Hovering over Markdown image syntax (`![alt](path/or/url)`) or HTML `<img src="...">` tags renders an interactive preview card with aspect-ratio fitting, supporting local files, remote URLs, and animated GIF playback.
 - **Robust Syntax Highlighting:** Includes GitHub-style code blocks with seamless backtick hiding, native syntax highlighting for Bash, Nim, Python, C/C++, JSON, TOML, JavaScript, and Ruby, and proper rendering of inline markdown formatting in Qt 6 RichText mode.
 - **Upstream Integrations:** Manually ported upstream enhancements including:
@@ -82,6 +85,7 @@ text_scale = 1.0
 - `Ctrl+F` searches the document. Use `Enter` or `Ctrl+G` for the next match and `Shift+Enter` for the previous match.
 - `Ctrl+H` opens find and replace.
 - `Ctrl+B`, `Ctrl+I`, and `Ctrl+Shift+X` toggle bold, italic, and strikethrough Markdown. `Ctrl+K` inserts a link.
+- `Ctrl+Shift+C` toggles task list checkboxes (`- [ ]` / `- [x]`).
 - `Ctrl+Shift+T` toggles focus mode (typewriter centering, paragraph dimming).
 - `Ctrl+?` displays the keyboard shortcut reference HUD.
 
