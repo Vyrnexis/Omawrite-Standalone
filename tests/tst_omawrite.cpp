@@ -53,14 +53,15 @@ private slots:
         QCOMPARE(markup.at(2).content.length, 4);
         QCOMPARE(markup.at(2).markers[0].length, 1);
         QCOMPARE(markup.at(3).kind, MarkdownHighlighter::InlineKind::Image);
-        QCOMPARE(markup.at(3).content.length, 5);
+        QCOMPARE(markup.at(3).content.length, 25);
         QCOMPARE(markup.at(3).markers[0].length, 2);
 
-        const QString sample = QStringLiteral("Check [link](https://foo.com) and ![pic](image.png)");
+        const QString sample = QStringLiteral("Check [link](https://foo.com) and ![pic](image.png) and <img src=\"https://example.com/art.jpg\">");
         QCOMPARE(MarkdownHighlighter::linkUrlAt(sample, 8), QStringLiteral("https://foo.com"));
         QCOMPARE(MarkdownHighlighter::imageUrlAt(sample, 8), QString());
         QCOMPARE(MarkdownHighlighter::imageUrlAt(sample, 38), QStringLiteral("image.png"));
         QCOMPARE(MarkdownHighlighter::linkUrlAt(sample, 38), QString());
+        QCOMPARE(MarkdownHighlighter::imageUrlAt(sample, 70), QStringLiteral("https://example.com/art.jpg"));
     }
 
     void loadsCurrentStandaloneConfig() {

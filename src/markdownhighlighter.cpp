@@ -320,11 +320,13 @@ void MarkdownHighlighter::highlightInline(const QString &text) {
 
     const QList<InlineMarkup> markup = inlineMarkup(text);
     for (const InlineMarkup &item : markup) {
+        if (item.kind == InlineKind::Image && item.markers[0].length == 0)
+            continue;
         const QTextCharFormat &contentFormat =
             item.kind == InlineKind::Bold ? m_boldFormat
             : item.kind == InlineKind::Italic ? m_italicFormat
             : item.kind == InlineKind::Strikethrough ? m_strikethroughFormat
-                                              : m_linkFormat;
+            : m_linkFormat;
         setFormat(item.content.start, item.content.length, contentFormat);
         for (const Span &marker : item.markers)
             setFormat(marker.start, marker.length, m_hiddenMarkerFormat);
@@ -334,7 +336,8 @@ void MarkdownHighlighter::highlightInline(const QString &text) {
 QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const QString &text) {
     QList<InlineMarkup> markup;
     if (!text.contains(QLatin1Char('*')) && !text.contains(QLatin1Char('_'))
-            && !text.contains(QLatin1Char('[')) && !text.contains(QLatin1Char('~'))) {
+            && !text.contains(QLatin1Char('[')) && !text.contains(QLatin1Char('~'))
+            && !text.contains(QLatin1Char('<')) && !text.contains(QLatin1Char('!'))) {
         return markup;
     }
     if (text.startsWith(QStringLiteral("```"))) {
@@ -401,10 +404,22 @@ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const
         const Span whole = span(match, 0);
         const Span content = span(match, 1);
         const int contentEnd = content.start + content.length;
-        markup.append({InlineKind::Image, content,
+        markup.append({InlineKind::Image, whole,
                        {{whole.start, 2},
                         {contentEnd, whole.start + whole.length - contentEnd}},
                        span(match, 2)});
+    }
+
+    static const QRegularExpression htmlImgRe(
+        QStringLiteral("<img\\b[^>]*?\\bsrc\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>"),
+        QRegularExpression::CaseInsensitiveOption);
+    QRegularExpressionMatchIterator htmlImgMatches = htmlImgRe.globalMatch(text);
+    while (htmlImgMatches.hasNext()) {
+        const QRegularExpressionMatch match = htmlImgMatches.next();
+        const Span whole = span(match, 0);
+        markup.append({InlineKind::Image, whole,
+                       {{0, 0}, {0, 0}},
+                       span(match, 1)});
     }
 
     return markup;
