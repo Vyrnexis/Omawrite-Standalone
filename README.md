@@ -14,7 +14,7 @@ This is a fork of the original Omawrite editor. The original project was built e
 - **Custom Themes & Fonts:** Allows custom hex colors for background, foreground, accents, and selections, as well as custom font families.
 - **Distraction-Free UI:** Native OS title bars have been stripped away for a frameless writing experience.
 - **Dynamic Zooming HUD:** Zoom in and out dynamically using `Ctrl++` and `Ctrl+-`, with a transient heads-up display.
-- **Image Hover Preview:** Hovering over any Markdown image syntax (`![alt](path/or/url)`) renders an interactive image preview card supporting local and remote images.
+- **Image & GIF Hover Preview HUD:** Hovering over Markdown image syntax (`![alt](path/or/url)`) or HTML `<img src="...">` tags renders an interactive preview card with aspect-ratio fitting, supporting local files, remote URLs, and animated GIF playback.
 - **Robust Syntax Highlighting:** Includes GitHub-style code blocks with seamless backtick hiding, native syntax highlighting for Bash, Nim, Python, C/C++, JSON, TOML, JavaScript, and Ruby, and proper rendering of inline markdown formatting in Qt 6 RichText mode.
 - **Upstream Integrations:** Manually ported upstream enhancements including:
   - [PR #8](https://github.com/omacom-io/omawrite/pull/8): Markdown link URLs on hover
