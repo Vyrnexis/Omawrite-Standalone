@@ -48,6 +48,10 @@ We have ported and integrated key upstream pull requests from [omacom-io/omawrit
 
 Omawrite Standalone supports live hot-reloading via `~/.config/omawrite/config.toml` without requiring an application restart.
 
+<p align="center">
+  <img src="assets/config_example.png" width="70%" alt="Omawrite TOML Configuration Example" />
+</p>
+
 ```toml
 # Omawrite Custom Theme & Configuration
 
