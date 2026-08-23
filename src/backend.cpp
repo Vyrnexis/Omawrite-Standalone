@@ -670,6 +670,8 @@ void Backend::loadDocumentText(const QString &text) {
     m_loading = false;
 
     applyDocumentTypography();
+    QTextCursor cursor(m_document);
+    cursor.setPosition(0);
     m_wordCountTimer.stop();
     setWordCount(countWords(text), text);
 }

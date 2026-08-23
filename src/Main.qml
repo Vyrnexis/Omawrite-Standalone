@@ -372,6 +372,12 @@ ApplicationWindow {
             externalChangeDialog.open();
         }
 
+        function onFileUrlChanged() {
+            editor.cursorPosition = 0;
+            editor.deselect();
+            editorFlick.scrollTo(0);
+        }
+
         function onFocusModeChanged() {
             Qt.callLater(editorFlick.ensureCursorVisible);
         }
