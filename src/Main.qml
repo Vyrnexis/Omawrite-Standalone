@@ -508,7 +508,9 @@ ApplicationWindow {
                         headingsDialog.close();
                         editor.cursorPosition = modelData.position;
                         editor.forceActiveFocus();
-                        Qt.callLater(editorFlick.ensureCursorVisible);
+                        Qt.callLater(function() {
+                            editorFlick.scrollToHeadingPosition(modelData.position);
+                        });
                     }
                 }
 
@@ -518,7 +520,9 @@ ApplicationWindow {
                         headingsDialog.close();
                         editor.cursorPosition = item.position;
                         editor.forceActiveFocus();
-                        Qt.callLater(editorFlick.ensureCursorVisible);
+                        Qt.callLater(function() {
+                            editorFlick.scrollToHeadingPosition(item.position);
+                        });
                     }
                 }
                 Keys.onEscapePressed: headingsDialog.close()
@@ -789,6 +793,13 @@ ApplicationWindow {
             function scrollTo(y) {
                 wheelScroll.stop();
                 contentY = snapToPixel(y);
+            }
+
+            function scrollToHeadingPosition(pos) {
+                var cursorRect = editor.positionToRectangle(pos);
+                var cursorTop = editor.y + cursorRect.y;
+                var targetY = Math.max(0, cursorTop - win.editorFontPixelSize * 2);
+                scrollTo(clampContentY(targetY));
             }
 
             // Keep the editing caret within the viewport so writing past the
