@@ -501,12 +501,12 @@ QString MarkdownHighlighter::linkUrlAt(const QString &text, int position) {
 
     const QList<InlineMarkup> markup = inlineMarkup(text);
     for (const InlineMarkup &item : markup) {
-        if (item.kind != InlineKind::Link
-                || position < item.content.start
-                || position >= item.content.start + item.content.length) {
+        if (item.kind != InlineKind::Link)
             continue;
-        }
-        return unescapeDestination(text.mid(item.destination.start, item.destination.length));
+        const int linkStart = item.markers[0].length > 0 ? item.markers[0].start : item.content.start;
+        const int linkEnd = item.markers[1].length > 0 ? item.markers[1].start + item.markers[1].length : item.content.start + item.content.length;
+        if (position >= linkStart && position < linkEnd)
+            return unescapeDestination(text.mid(item.destination.start, item.destination.length));
     }
     return {};
 }
@@ -517,12 +517,12 @@ QString MarkdownHighlighter::imageUrlAt(const QString &text, int position) {
 
     const QList<InlineMarkup> markup = inlineMarkup(text);
     for (const InlineMarkup &item : markup) {
-        if (item.kind != InlineKind::Image
-                || position < item.content.start
-                || position >= item.content.start + item.content.length) {
+        if (item.kind != InlineKind::Image)
             continue;
-        }
-        return unescapeDestination(text.mid(item.destination.start, item.destination.length));
+        const int imgStart = item.markers[0].length > 0 ? item.markers[0].start : item.content.start;
+        const int imgEnd = item.markers[1].length > 0 ? item.markers[1].start + item.markers[1].length : item.content.start + item.content.length;
+        if (position >= imgStart && position < imgEnd)
+            return unescapeDestination(text.mid(item.destination.start, item.destination.length));
     }
     return {};
 }
