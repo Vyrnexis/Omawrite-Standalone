@@ -54,7 +54,7 @@ private slots:
         QCOMPARE(markup.at(2).markers[0].length, 1);
     }
 
-    void loadsCurrentOmarchyTheme() {
+    void loadsCurrentStandaloneConfig() {
         QTemporaryDir homeDirectory;
         QVERIFY(homeDirectory.isValid());
 
@@ -65,18 +65,19 @@ private slots:
         } restoreHome{originalHome};
         QVERIFY(qputenv("HOME", homeDirectory.path().toUtf8()));
 
-        const QString themeDirectory = homeDirectory.path()
-            + QStringLiteral("/.local/state/omarchy/current/theme");
-        QVERIFY(QDir().mkpath(themeDirectory));
+        const QString configDirectory = homeDirectory.path()
+            + QStringLiteral("/.config/omawrite");
+        QVERIFY(QDir().mkpath(configDirectory));
 
-        QFile colorsFile(themeDirectory + QStringLiteral("/colors.toml"));
+        QFile colorsFile(configDirectory + QStringLiteral("/config.toml"));
         QVERIFY(colorsFile.open(QIODevice::WriteOnly | QIODevice::Text));
         const QByteArray palette(
             "mode = \"light\"\n"
             "accent = \"#112233\"\n"
             "selection = \"#445566\"\n"
             "background = \"#fefefe\"\n"
-            "foreground = \"#101010\"\n");
+            "foreground = \"#101010\"\n"
+            "text_scale = 1.25\n");
         QCOMPARE(colorsFile.write(palette), qint64(palette.size()));
         colorsFile.close();
 
@@ -85,6 +86,7 @@ private slots:
         QCOMPARE(backend.themeForeground(), QStringLiteral("#101010"));
         QCOMPARE(backend.themeAccent(), QStringLiteral("#112233"));
         QCOMPARE(backend.themeSelection(), QStringLiteral("#445566"));
+        QCOMPARE(backend.textScale(), 1.25);
         QVERIFY(!backend.darkMode());
     }
 
@@ -195,6 +197,15 @@ private slots:
     void scalesTextWithDesktopTextSize() {
         const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
         QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir homeDirectory;
+        QVERIFY(homeDirectory.isValid());
+        const QByteArray originalHome = qgetenv("HOME");
+        struct HomeRestorer {
+            QByteArray value;
+            ~HomeRestorer() { qputenv("HOME", value); }
+        } restoreHome{originalHome};
+        QVERIFY(qputenv("HOME", homeDirectory.path().toUtf8()));
 
         Backend backend;
         QQmlEngine engine;
