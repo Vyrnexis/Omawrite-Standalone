@@ -4,8 +4,12 @@ A minimal, distraction-free Markdown writing application built with Qt Quick and
 
 Originally based on [omacom-io/omawrite](https://github.com/omacom-io/omawrite), **Omawrite Standalone** uses native Qt window controls and optional Linux desktop-portal integration. Other Qt 6 platforms fall back to Qt's system appearance support without requiring D-Bus.
 
-![screenshot-2026-06-23_15-24-08](https://github.com/user-attachments/assets/4e930c0d-edda-4046-b444-a59eff523329)
-![screenshot-2026-06-23_15-23-23](https://github.com/user-attachments/assets/8ced7c26-961b-4ded-b263-84403001a951)
+![Main Canvas and Image Preview](assets/main_and_preview.png)
+
+<p align="center">
+  <img src="assets/headings_hud.png" width="48%" alt="Document Heading Navigation HUD" />
+  <img src="assets/code_highlighting.png" width="48%" alt="Code Block Syntax Highlighting" />
+</p>
 
 ---
 
