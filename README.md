@@ -7,6 +7,11 @@ Originally based on [omacom-io/omawrite](https://github.com/omacom-io/omawrite),
 ![Main Canvas and Image Preview](assets/main_and_preview.png)
 
 <p align="center">
+  <img src="assets/focus_mode.png" width="48%" alt="Focus Mode & Paragraph Dimming" />
+  <img src="assets/stats_hud.png" width="48%" alt="Extended Writing Statistics Popover" />
+</p>
+
+<p align="center">
   <img src="assets/headings_hud.png" width="48%" alt="Document Heading Navigation HUD" />
   <img src="assets/code_highlighting.png" width="48%" alt="Code Block Syntax Highlighting" />
 </p>
