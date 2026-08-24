@@ -207,27 +207,7 @@ void MarkdownHighlighter::highlightBlock(const QString &text) {
         const QRegularExpressionMatch match = codeBlockStartRe.match(text);
         if (match.hasMatch()) {
             const QString fence = match.captured(1);
-            const QString lang = match.captured(2).toLower();
-            int languageState = 1;
-            if (lang == QLatin1String("bash") || lang == QLatin1String("sh")) {
-                languageState = 2;
-            } else if (lang == QLatin1String("nim")) {
-                languageState = 3;
-            } else if (lang == QLatin1String("python") || lang == QLatin1String("py")) {
-                languageState = 4;
-            } else if (lang == QLatin1String("toml")) {
-                languageState = 5;
-            } else if (lang == QLatin1String("json")) {
-                languageState = 6;
-            } else if (lang == QLatin1String("c")) {
-                languageState = 7;
-            } else if (lang == QLatin1String("cpp") || lang == QLatin1String("c++")) {
-                languageState = 8;
-            } else if (lang == QLatin1String("js") || lang == QLatin1String("javascript")) {
-                languageState = 9;
-            } else if (lang == QLatin1String("ruby") || lang == QLatin1String("rb")) {
-                languageState = 10;
-            }
+            const int languageState = CodeHighlighter::languageStateForName(match.captured(2));
             const int fenceKind = fence.startsWith(QLatin1Char('~')) ? 100 : 0;
             setCurrentBlockState(languageState + fenceKind + qMin(99, fence.length()) * 1000);
             setFormat(0, text.length() + 1, m_blockCodeFormat);
