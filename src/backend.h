@@ -28,6 +28,8 @@ class Backend : public QObject {
     Q_PROPERTY(int readingTimeMinutes READ readingTimeMinutes NOTIFY wordCountChanged)
     Q_PROPERTY(bool darkMode READ darkMode WRITE setDarkMode NOTIFY darkModeChanged)
     Q_PROPERTY(qreal textScale READ textScale WRITE setTextScale NOTIFY textScaleChanged)
+    Q_PROPERTY(int editorFontSize READ editorFontSize WRITE setEditorFontSize
+               NOTIFY editorFontSizeChanged)
     Q_PROPERTY(QString fontFamily READ fontFamily NOTIFY fontFamilyChanged)
     Q_PROPERTY(QString themeBackground READ themeBackground NOTIFY themeColorsChanged)
     Q_PROPERTY(QString themeForeground READ themeForeground NOTIFY themeColorsChanged)
@@ -59,6 +61,8 @@ public:
     void setDarkMode(bool darkMode);
     qreal textScale() const { return m_textScale; }
     void setTextScale(qreal textScale);
+    int editorFontSize() const { return m_editorFontSize; }
+    void setEditorFontSize(int editorFontSize);
     void setSystemTextScale(qreal textScale);
     QString fontFamily() const { return m_fontFamily; }
     QString themeBackground() const { return m_themeBackground; }
@@ -74,6 +78,7 @@ public:
     static QString normalizedLinkUrl(const QString &clipboardText);
     static QString suggestedFileName(const QString &text);
     static QString sanitizedEntryName(const QString &text);
+    static QString tomlValue(const QString &text);
 
     Q_INVOKABLE void attachDocument(QObject *textDocument);
     Q_INVOKABLE void openDialog();
@@ -104,6 +109,7 @@ public:
     Q_INVOKABLE QVariantMap windowGeometry() const;
     Q_INVOKABLE void saveWindowGeometry(int x, int y, int width, int height, bool maximized);
     Q_INVOKABLE void resetTextScale();
+    Q_INVOKABLE void resetEditorFontSize();
     Q_INVOKABLE void toggleFocusMode();
     Q_INVOKABLE void updateCursorPosition(int position);
     Q_INVOKABLE QVariantList documentHeadings() const;
@@ -115,6 +121,7 @@ signals:
     void wordCountChanged();
     void darkModeChanged();
     void textScaleChanged();
+    void editorFontSizeChanged();
     void fontFamilyChanged();
     void themeColorsChanged();
     void openDialogRequested();
@@ -160,6 +167,7 @@ private:
     bool m_darkMode = true;
     bool m_systemDarkMode = true;
     qreal m_textScale = 1.0;
+    int m_editorFontSize = 20;
     qreal m_systemTextScale = 1.0;
     qreal m_configuredTextScale = 1.0;
     bool m_hasConfiguredTextScale = false;

@@ -1,9 +1,13 @@
 #include <QtTest>
 #include <QFont>
+#include <QColor>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickStyle>
+#include <QQuickItem>
+#include <QQuickTextDocument>
+#include <QQuickWindow>
 #include <QStandardPaths>
 #include <QTextBlock>
 #include <QTextDocument>
@@ -16,6 +20,7 @@ class OmawriteTest : public QObject {
 
 private slots:
     void initTestCase() {
+        QStandardPaths::setTestModeEnabled(true);
         QVERIFY(m_settingsDirectory.isValid());
         QQuickStyle::setStyle(QStringLiteral("Material"));
         QSettings::setDefaultFormat(QSettings::IniFormat);
@@ -28,8 +33,20 @@ private slots:
 
     void countsWords() {
         QCOMPARE(Backend::countWords(QStringLiteral("one two-three don't 42")), 4);
-        QCOMPARE(Backend::countWords(QStringLiteral("你好 世界")), 2);
+        QCOMPARE(Backend::countWords(QStringLiteral("你好世界")), 4);
+        QCOMPARE(Backend::countWords(QStringLiteral("日本語テスト")), 6);
+        QCOMPARE(Backend::countWords(QStringLiteral("foo中bar")), 3);
         QCOMPARE(Backend::countWords(QString()), 0);
+    }
+
+    // Verifies TOML values retain quoted hashes and drop trailing comments.
+    void readsAnnotatedTomlValues() {
+        QCOMPARE(Backend::tomlValue(QStringLiteral("\"#112233\" # accent")),
+                 QStringLiteral("#112233"));
+        QCOMPARE(Backend::tomlValue(QStringLiteral("1.25 # scale")),
+                 QStringLiteral("1.25"));
+        QCOMPARE(Backend::tomlValue(QStringLiteral("#112233")),
+                 QStringLiteral("#112233"));
     }
 
     void normalizesLinks() {
@@ -248,6 +265,86 @@ private slots:
         QVERIFY(QMetaObject::invokeMethod(openDialog, "close"));
     }
 
+    // Verifies the editor owns apostrophes, fences, zoom, and footer layout correctly.
+    void handlesEditorKeysAndFooterLayout() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> root(component.create());
+        QVERIFY2(root, qPrintable(component.errorString()));
+
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        auto *editor = root->findChild<QQuickItem *>(QStringLiteral("sourceEditor"));
+        auto *footer = root->findChild<QQuickItem *>(QStringLiteral("footer"));
+        auto *viewport = root->findChild<QQuickItem *>(QStringLiteral("editorViewport"));
+        QVERIFY(window);
+        QVERIFY(editor);
+        QVERIFY(footer);
+        QVERIFY(viewport);
+        auto *quickDocument = qobject_cast<QQuickTextDocument *>(
+            editor->property("textDocument").value<QObject *>());
+        QVERIFY(quickDocument);
+        window->requestActivate();
+        QTRY_VERIFY(window->isActive());
+        QVERIFY(QMetaObject::invokeMethod(editor, "forceActiveFocus"));
+
+        editor->setProperty("text", QString());
+        QTest::keyClick(window, Qt::Key_D);
+        QTest::keyClick(window, Qt::Key_O);
+        QTest::keyClick(window, Qt::Key_N);
+        QTest::keyClick(window, Qt::Key_Apostrophe);
+        QTest::keyClick(window, Qt::Key_T);
+        QCOMPARE(quickDocument->textDocument()->toPlainText(), QStringLiteral("don't"));
+
+        editor->setProperty("text", QString());
+        QTest::keyClick(window, Qt::Key_QuoteLeft);
+        QTest::keyClick(window, Qt::Key_QuoteLeft);
+        QTest::keyClick(window, Qt::Key_QuoteLeft);
+        QCOMPARE(quickDocument->textDocument()->toPlainText(), QStringLiteral("```"));
+
+        quickDocument->textDocument()->setPlainText(QStringLiteral("~~~\n- literal"));
+        editor->setProperty("cursorPosition", editor->property("length"));
+        QTest::keyClick(window, Qt::Key_Return);
+        QCOMPARE(quickDocument->textDocument()->toPlainText(),
+                 QStringLiteral("~~~\n- literal\n"));
+
+        QCOMPARE(backend.editorFontSize(), 20);
+        QTest::keyClick(window, Qt::Key_Equal, Qt::ControlModifier);
+        QCOMPARE(backend.editorFontSize(), 22);
+        QTest::keyClick(window, Qt::Key_0, Qt::ControlModifier);
+        QCOMPARE(backend.editorFontSize(), 20);
+
+        QCOMPARE(viewport->mapToScene(QPointF(0, viewport->height())).y(),
+                 footer->mapToScene(QPointF()).y());
+        QCOMPARE(footer->property("color").value<QColor>(),
+                 QColor(backend.themeBackground()));
+    }
+
+    // Verifies dialog letter shortcuts stay scoped to the open dialog.
+    void handlesUnsavedDialogShortcuts() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QScopedPointer<QObject> root(component.create());
+        QVERIFY2(root, qPrintable(component.errorString()));
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QObject *dialog = root->findChild<QObject *>(QStringLiteral("unsavedChangesDialog"));
+        QVERIFY(window);
+        QVERIFY(dialog);
+        QSignalSpy cancelSpy(dialog, SIGNAL(cancelRequested()));
+        QVERIFY(QMetaObject::invokeMethod(dialog, "open"));
+        QTRY_VERIFY(dialog->property("opened").toBool());
+        QTest::keyClick(window, Qt::Key_C);
+        QTRY_COMPARE(cancelSpy.count(), 1);
+    }
+
     void scalesTextWithDesktopTextSize() {
         const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
         QVERIFY(!mainQmlPath.isEmpty());
@@ -311,6 +408,34 @@ private slots:
         fallbackDocument.saveAsDialog();
         const QUrl fallbackUrl = fallbackDialogSpy.takeFirst().constFirst().toUrl();
         QCOMPARE(QFileInfo(fallbackUrl.toLocalFile()).absolutePath(), QDir::homePath());
+    }
+
+    // Verifies returning to the baseline immediately clears the dirty state.
+    void clearsDirtyStateWhenTextIsReverted() {
+        Backend backend;
+        QTextDocument document;
+        backend.attachTextDocument(&document);
+
+        document.setPlainText(QStringLiteral("draft"));
+        QVERIFY(backend.editorTextChanged());
+        QVERIFY(backend.modified());
+        document.setPlainText(QString());
+        QVERIFY(backend.editorTextChanged());
+        QVERIFY(!backend.modified());
+    }
+
+    // Verifies editor font size is bounded and restored across backend instances.
+    void persistsEditorFontSize() {
+        QSettings().remove(QStringLiteral("editor/fontSize"));
+        {
+            Backend backend;
+            backend.setEditorFontSize(28);
+            QCOMPARE(backend.editorFontSize(), 28);
+        }
+        Backend restored;
+        QCOMPARE(restored.editorFontSize(), 28);
+        restored.setEditorFontSize(100);
+        QCOMPARE(restored.editorFontSize(), 48);
     }
 
     // Verifies external deletion immediately protects the in-memory document.

@@ -91,10 +91,12 @@ SystemTheme::SystemTheme(QObject *parent) : QObject(parent) {
     m_darkMode = detectDarkMode();
     m_textScale = detectTextScale();
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     if (QGuiApplication::styleHints()) {
         connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged,
                 this, &SystemTheme::refresh);
     }
+#endif
 
 #if defined(Q_OS_LINUX)
     QDBusConnection::sessionBus().connect(
@@ -191,6 +193,9 @@ qreal SystemTheme::detectTextScale() const {
 bool SystemTheme::qtDarkMode(bool *known) const {
     *known = false;
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 5, 0)
+    return false;
+#else
     if (!QGuiApplication::styleHints())
         return false;
 
@@ -205,6 +210,7 @@ bool SystemTheme::qtDarkMode(bool *known) const {
     }
 
     return false;
+#endif
 }
 
 void SystemTheme::setDarkMode(bool darkMode) {

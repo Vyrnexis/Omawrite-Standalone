@@ -40,6 +40,32 @@ constexpr qreal typoraLineHeightPercent = 140;
 const QString lastSaveDirectorySetting = QStringLiteral("file/lastSaveDirectory");
 const QString browseDirectorySetting = QStringLiteral("file/browseDirectory");
 const QString sidebarWidthSetting = QStringLiteral("file/sidebarWidth");
+const QString editorFontSizeSetting = QStringLiteral("editor/fontSize");
+constexpr int defaultEditorFontSize = 20;
+constexpr int minimumEditorFontSize = 10;
+constexpr int maximumEditorFontSize = 48;
+
+enum class AtomicWrite { Written, Failed, NotOpened };
+
+// Writes a document atomically and distinguishes failure before opening.
+AtomicWrite writeDocumentAtomically(const QString &path, const QByteArray &contents) {
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return AtomicWrite::NotOpened;
+    if (file.write(contents) != contents.size()) {
+        file.cancelWriting();
+        return AtomicWrite::Failed;
+    }
+    return file.commit() ? AtomicWrite::Written : AtomicWrite::Failed;
+}
+
+// Writes directly only when atomic creation is unsupported by the filesystem.
+bool writeDocumentDirectly(const QString &path, const QByteArray &contents) {
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate))
+        return false;
+    return file.write(contents) == contents.size() && file.flush();
+}
 
 // Returns the platform-native Omawrite configuration directory.
 QString configurationDirectory() {
@@ -85,6 +111,10 @@ QString Backend::normalizedLinkUrl(const QString &clipboardText) {
 }
 
 Backend::Backend(QObject *parent) : QObject(parent) {
+    m_editorFontSize = qBound(minimumEditorFontSize,
+                              QSettings().value(editorFontSizeSetting,
+                                                defaultEditorFontSize).toInt(),
+                              maximumEditorFontSize);
     const QString stateDirectory = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(stateDirectory);
     // Claim an orphaned snapshot before taking an empty slot. This ensures a
@@ -188,6 +218,22 @@ void Backend::setDarkMode(bool darkMode) {
 
 void Backend::setTextScale(qreal textScale) {
     applyTextScale(qBound<qreal>(0.5, textScale, 3.0));
+}
+
+// Persists the editor's base font size within its supported range.
+void Backend::setEditorFontSize(int editorFontSize) {
+    const int boundedSize = qBound(minimumEditorFontSize, editorFontSize,
+                                   maximumEditorFontSize);
+    if (m_editorFontSize == boundedSize)
+        return;
+    m_editorFontSize = boundedSize;
+    QSettings().setValue(editorFontSizeSetting, m_editorFontSize);
+    emit editorFontSizeChanged();
+}
+
+// Restores the shipped editor font size.
+void Backend::resetEditorFontSize() {
+    setEditorFontSize(defaultEditorFontSize);
 }
 
 // Applies desktop scaling unless the configuration supplies an explicit scale.
@@ -454,9 +500,18 @@ bool Backend::editorTextChanged() {
     }
 
     scheduleWordCount();
-    setModified(true);
-    setStatus(QStringLiteral("Unsaved"));
-    scheduleRecovery();
+    const QString text = currentDocumentText();
+    const bool baselineKnown = m_hasKnownFileContents
+        || !m_fileUrl.isValid() || m_fileUrl.isEmpty();
+    if (baselineKnown && text == m_lastKnownFileText) {
+        setModified(false);
+        clearRecovery();
+        setStatus(m_hasKnownFileContents ? QStringLiteral("Saved") : QString());
+    } else {
+        setModified(true);
+        setStatus(QStringLiteral("Unsaved"));
+        scheduleRecovery();
+    }
     return true;
 }
 
@@ -713,15 +768,9 @@ void Backend::saveTo(const QUrl &url) {
         return;
     }
 
-    const QString targetName = QFileInfo(url.toLocalFile()).fileName();
-    QSaveFile file(url.toLocalFile());
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        setStatus(QStringLiteral("Could not save %1.").arg(targetName));
-        return;
-    }
-
+    const QString path = url.toLocalFile();
+    const QString targetName = QFileInfo(path).fileName();
     const QByteArray contents = currentDocumentText().toUtf8();
-    file.write(contents);
 
     // QSaveFile commits by replacing the target. Stop watching the old inode
     // before that replacement so our own write is not classified as external.
@@ -729,11 +778,12 @@ void Backend::saveTo(const QUrl &url) {
     if (!watched.isEmpty())
         m_fileWatcher.removePaths(watched);
 
-    // commit() flushes, fsyncs, and atomically renames the temp file into place,
-    // returning false (and leaving the original untouched) on any write error.
-    if (!file.commit()) {
+    const AtomicWrite atomic = writeDocumentAtomically(path, contents);
+    if (atomic == AtomicWrite::Failed
+            || (atomic == AtomicWrite::NotOpened
+                && !writeDocumentDirectly(path, contents))) {
         watchCurrentFile();
-        setStatus(QStringLiteral("Could not write %1.").arg(targetName));
+        setStatus(QStringLiteral("Could not save %1.").arg(targetName));
         return;
     }
 
@@ -878,11 +928,6 @@ QVariantList Backend::folderEntries() const {
 }
 
 void Backend::loadThemeConfig() {
-    m_themeBackground = m_systemDarkMode ? QStringLiteral("#101010") : QStringLiteral("#ffffff");
-    m_themeForeground = m_systemDarkMode ? QStringLiteral("#eeeeee") : QStringLiteral("#222324");
-    m_themeAccent = m_systemDarkMode ? QStringLiteral("#5584aa") : QStringLiteral("#2077b2");
-    m_themeSelection = m_systemDarkMode ? QStringLiteral("#186a9a") : QStringLiteral("#2077b2");
-
     const QString configDir = configurationDirectory();
     const QString configPath = configDir + QStringLiteral("/config.toml");
     
@@ -892,6 +937,10 @@ void Backend::loadThemeConfig() {
     }
 
     QString themeMode;
+    QString background;
+    QString foreground;
+    QString accent;
+    QString selection;
     QString configuredFontFamily = QStringLiteral("iA Writer Mono S");
     qreal configuredTextScale = m_systemTextScale;
     bool hasConfiguredTextScale = false;
@@ -908,25 +957,20 @@ void Backend::loadThemeConfig() {
                 continue;
 
             const QString key = line.left(equals).trimmed();
-            QString value = line.mid(equals + 1).trimmed();
-            if (value.size() >= 2
-                    && ((value.front() == QLatin1Char('"') && value.back() == QLatin1Char('"'))
-                        || (value.front() == QLatin1Char('\'') && value.back() == QLatin1Char('\'')))) {
-                value = value.mid(1, value.size() - 2);
-            }
+            const QString value = tomlValue(line.mid(equals + 1));
 
             if (key == QStringLiteral("background")) {
                 if (QColor(value).isValid())
-                    m_themeBackground = value;
+                    background = value;
             } else if (key == QStringLiteral("foreground")) {
                 if (QColor(value).isValid())
-                    m_themeForeground = value;
+                    foreground = value;
             } else if (key == QStringLiteral("accent")) {
                 if (QColor(value).isValid())
-                    m_themeAccent = value;
+                    accent = value;
             } else if (key == QStringLiteral("selection")) {
                 if (QColor(value).isValid())
-                    m_themeSelection = value;
+                    selection = value;
             } else if (key == QStringLiteral("text_scale")) {
                 bool ok;
                 const qreal scale = value.toDouble(&ok);
@@ -951,24 +995,29 @@ void Backend::loadThemeConfig() {
         emit fontFamilyChanged();
     }
 
-    bool themeModeKnown = false;
     bool themeIsDark = m_systemDarkMode;
     if (themeMode == QStringLiteral("dark")) {
         themeIsDark = true;
-        themeModeKnown = true;
     } else if (themeMode == QStringLiteral("light")) {
         themeIsDark = false;
-        themeModeKnown = true;
     } else {
-        const QColor background(m_themeBackground);
-        if (background.isValid()) {
-            const double luminance = 0.299 * background.redF()
-                + 0.587 * background.greenF() + 0.114 * background.blueF();
+        const QColor parsedBackground(background);
+        if (parsedBackground.isValid()) {
+            const double luminance = 0.299 * parsedBackground.redF()
+                + 0.587 * parsedBackground.greenF() + 0.114 * parsedBackground.blueF();
             themeIsDark = luminance < 0.5;
-            themeModeKnown = true;
         }
     }
-    if (themeModeKnown && themeIsDark != m_darkMode) {
+
+    m_themeBackground = themeIsDark ? QStringLiteral("#101010") : QStringLiteral("#ffffff");
+    m_themeForeground = themeIsDark ? QStringLiteral("#eeeeee") : QStringLiteral("#222324");
+    m_themeAccent = themeIsDark ? QStringLiteral("#5584aa") : QStringLiteral("#2077b2");
+    m_themeSelection = themeIsDark ? QStringLiteral("#186a9a") : QStringLiteral("#2077b2");
+    if (!background.isEmpty()) m_themeBackground = background;
+    if (!foreground.isEmpty()) m_themeForeground = foreground;
+    if (!accent.isEmpty()) m_themeAccent = accent;
+    if (!selection.isEmpty()) m_themeSelection = selection;
+    if (themeIsDark != m_darkMode) {
         m_darkMode = themeIsDark;
         emit darkModeChanged();
     }
@@ -1015,15 +1064,48 @@ QString Backend::currentDocumentText() const {
 }
 
 int Backend::countWords(const QString &text) {
+    static const QRegularExpression cjkRe(
+        QStringLiteral("(?=[\\p{L}\\p{N}])[\\p{Han}\\p{Hiragana}\\p{Katakana}]"));
     static const QRegularExpression wordRe(
         QStringLiteral("[\\p{L}\\p{N}]+(?:['-][\\p{L}\\p{N}]+)*"));
     int count = 0;
-    QRegularExpressionMatchIterator it = wordRe.globalMatch(text);
+    QRegularExpressionMatchIterator cjkIt = cjkRe.globalMatch(text);
+    while (cjkIt.hasNext()) {
+        cjkIt.next();
+        ++count;
+    }
+    QString nonCjkText = text;
+    nonCjkText.replace(cjkRe, QStringLiteral(" "));
+    QRegularExpressionMatchIterator it = wordRe.globalMatch(nonCjkText);
     while (it.hasNext()) {
         it.next();
         ++count;
     }
     return count;
+}
+
+// Extracts a scalar TOML value while discarding a trailing inline comment.
+QString Backend::tomlValue(const QString &text) {
+    const QString value = text.trimmed();
+    if (value.isEmpty())
+        return value;
+    const QChar quote = value.front();
+    if (quote == QLatin1Char('"') || quote == QLatin1Char('\'')) {
+        bool escaped = false;
+        for (int i = 1; i < value.length(); ++i) {
+            if (quote == QLatin1Char('"') && !escaped && value.at(i) == QLatin1Char('\\')) {
+                escaped = true;
+            } else if (!escaped && value.at(i) == quote) {
+                return value.mid(1, i - 1);
+            } else {
+                escaped = false;
+            }
+        }
+        return value;
+    }
+    static const QRegularExpression commentRe(QStringLiteral("\\s+#"));
+    const int comment = value.indexOf(commentRe);
+    return comment < 0 ? value : value.left(comment).trimmed();
 }
 
 QString Backend::sanitizedEntryName(const QString &text) {

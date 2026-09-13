@@ -3,6 +3,7 @@ import QtQuick.Controls
 
 Dialog {
     id: root
+    objectName: "unsavedChangesDialog"
 
     property string fileName: "Untitled.md"
     property bool darkMode: true
@@ -27,6 +28,24 @@ Dialog {
     x: Math.round((containerWidth - width) / 2)
     y: Math.round((containerHeight - height) / 2)
     padding: 20
+
+    Shortcut {
+        sequence: "C"
+        enabled: root.opened
+        onActivated: cancelButton.clicked()
+    }
+
+    Shortcut {
+        sequence: "D"
+        enabled: root.opened
+        onActivated: discardButton.clicked()
+    }
+
+    Shortcut {
+        sequence: "S"
+        enabled: root.opened
+        onActivated: saveButton.clicked()
+    }
 
     background: Rectangle {
         color: root.darkMode ? "#1a1a1a" : "#ffffff"
@@ -68,6 +87,7 @@ Dialog {
             SquareDialogButton {
                 id: cancelButton
                 text: "Cancel"
+                formattedText: "<u>C</u>ancel"
                 darkMode: root.darkMode
                 textScale: root.textScale
                 labelColor: root.textColor
@@ -81,6 +101,7 @@ Dialog {
             SquareDialogButton {
                 id: discardButton
                 text: "Discard"
+                formattedText: "<u>D</u>iscard"
                 darkMode: root.darkMode
                 textScale: root.textScale
                 labelColor: root.textColor
@@ -97,6 +118,7 @@ Dialog {
             SquareDialogButton {
                 id: saveButton
                 text: "Save"
+                formattedText: "<u>S</u>ave"
                 primary: true
                 darkMode: root.darkMode
                 textScale: root.textScale

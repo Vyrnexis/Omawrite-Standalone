@@ -26,7 +26,7 @@ ApplicationWindow {
     // `omarchy display text size` drives) anchored so its 12px default leaves
     // the app at the sizes it was designed around.
     readonly property real textScale: backend.textScale
-    readonly property int editorFontPixelSize: scaledSize(20)
+    readonly property int editorFontPixelSize: scaledSize(backend.editorFontSize)
     // Never wider than the Flickable's viewport, whatever the floor asks for:
     // a tiling compositor can resize the window below its minimum width.
     readonly property int editorWidth: Math.min(
@@ -178,10 +178,10 @@ ApplicationWindow {
     }
 
     Shortcut {
-        sequence: "Ctrl+="
+        sequences: ["Ctrl++", "Ctrl+="]
         context: Qt.ApplicationShortcut
         onActivated: {
-            backend.textScale = backend.textScale + 0.1;
+            backend.editorFontSize += 2;
             zoomOverlay.show();
         }
     }
@@ -190,7 +190,7 @@ ApplicationWindow {
         sequence: "Ctrl+-"
         context: Qt.ApplicationShortcut
         onActivated: {
-            backend.textScale = Math.max(0.1, backend.textScale - 0.1);
+            backend.editorFontSize -= 2;
             zoomOverlay.show();
         }
     }
@@ -199,7 +199,7 @@ ApplicationWindow {
         sequence: "Ctrl+0"
         context: Qt.ApplicationShortcut
         onActivated: {
-            backend.resetTextScale();
+            backend.resetEditorFontSize();
             zoomOverlay.show();
         }
     }
@@ -563,7 +563,7 @@ ApplicationWindow {
         Label {
             id: zoomLabel
             anchors.centerIn: parent
-            text: Math.round(backend.textScale * 100) + "%"
+            text: Math.round(backend.editorFontSize / 20 * 100) + "%"
             color: win.textColor
             font.family: backend.fontFamily
             font.pixelSize: 24
@@ -629,7 +629,11 @@ ApplicationWindow {
 
         Flickable {
             id: editorFlick
-            anchors.fill: parent
+            objectName: "editorViewport"
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: footer.top
             anchors.leftMargin: 24
             anchors.rightMargin: 24
             clip: true
@@ -643,12 +647,6 @@ ApplicationWindow {
                 // flicking the Flickable, so the bar has to be told about
                 // that activity; linger briefly after the last event.
                 active: hovered || pressed || wheelScroll.running || scrollLinger.running
-                // Stop above the footer strip so the bar doesn't overlap
-                // the word count in the bottom-right corner. Padding and
-                // inset, not anchors: the attached-ScrollBar layout overrides
-                // anchors. Padding stops the thumb, the inset the track.
-                bottomPadding: win.scaledSize(32)
-                bottomInset: win.scaledSize(32)
             }
 
             Timer {
@@ -912,8 +910,7 @@ ApplicationWindow {
                     var lineStart = plainText.lastIndexOf("\n", cursorPosition - 1) + 1;
                     var line = plainText.slice(lineStart, cursorPosition);
                     var before = plainText.slice(0, cursorPosition);
-                    var fences = (before.match(/^\s*```/gm) || []).length;
-                    if ((fences % 2) === 1) {
+                    if (insideFence(before)) {
                         replaceSelectionWith("\n");
                         return;
                     }
@@ -948,6 +945,28 @@ ApplicationWindow {
                         return;
                     }
                     replaceSelectionWith("\n\n");
+                }
+
+                // Reports whether the caret follows an unmatched Markdown fence.
+                function insideFence(before) {
+                    var fenceChar = "";
+                    var fenceLength = 0;
+                    var lines = before.split("\n");
+                    for (var i = 0; i < lines.length; ++i) {
+                        var match = lines[i].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+                        if (!match)
+                            continue;
+                        var marker = match[1];
+                        if (fenceLength === 0) {
+                            fenceChar = marker[0];
+                            fenceLength = marker.length;
+                        } else if (marker[0] === fenceChar && marker.length >= fenceLength
+                                   && match[2].trim().length === 0) {
+                            fenceChar = "";
+                            fenceLength = 0;
+                        }
+                    }
+                    return fenceLength > 0;
                 }
 
                 function escapeMarkdownLinkText(linkText) {
@@ -1236,12 +1255,26 @@ ApplicationWindow {
                                 return;
                             }
 
-                            // If typing a backtick when already preceded by a backtick (e.g. creating ```),
-                            // do not auto-pair so that ``` fence blocks can be typed naturally.
+                            var preceding = cursorPosition > 0
+                                ? getText(cursorPosition - 1, cursorPosition) : "";
+                            var precedingIsWord = preceding !== ""
+                                && (preceding.toLocaleLowerCase() !== preceding.toLocaleUpperCase()
+                                    || /[0-9]/.test(preceding));
+                            if (openChar === "'" && precedingIsWord)
+                                return;
+
                             if (openChar === "`") {
-                                var prevChar = cursorPosition > 0 ? getText(cursorPosition - 1, cursorPosition) : "";
-                                if (prevChar === "`")
-                                    return; // Let TextEdit handle raw backtick insertion
+                                var beforePair = cursorPosition > 1
+                                    ? getText(cursorPosition - 2, cursorPosition) : "";
+                                var nextChar = cursorPosition < length
+                                    ? getText(cursorPosition, cursorPosition + 1) : "";
+                                if (beforePair === "``" && nextChar === "`") {
+                                    cursorPosition += 1;
+                                    event.accepted = true;
+                                    return;
+                                }
+                                if (preceding === "`")
+                                    return;
                             }
 
                             if (openChar === closeChar && cursorPosition < length
@@ -1426,6 +1459,16 @@ ApplicationWindow {
             acceptedButtons: Qt.NoButton
             visible: backend.focusMode
             z: 5
+        }
+
+        Rectangle {
+            id: footer
+            objectName: "footer"
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: Math.max(36, win.scaledSize(36))
+            color: win.pageColor
         }
 
         Row {

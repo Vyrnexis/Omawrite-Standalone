@@ -11,11 +11,39 @@
 #include <QVariant>
 #include <QWindow>
 #include <QFile>
+#include <QByteArray>
+
+#include <cstdio>
 
 #include "backend.h"
 #include "systemtheme.h"
 
 namespace {
+constexpr const char usage[] =
+    "Omawrite Standalone - a minimal Markdown writing application.\n\n"
+    "Usage: omawrite [FILE]\n\n"
+    "Options:\n"
+    "  -h, --help    Show this help and exit\n";
+
+// Handles terminal-only options before the graphical application starts.
+int commandLineExitCode(int argc, char *argv[]) {
+    bool optionsEnded = false;
+    for (int i = 1; i < argc; ++i) {
+        const QByteArray argument(argv[i]);
+        if (!optionsEnded && argument == "--") {
+            optionsEnded = true;
+        } else if (!optionsEnded && (argument == "-h" || argument == "--help")) {
+            std::fputs(usage, stdout);
+            return 0;
+        } else if (!optionsEnded && argument.startsWith('-')) {
+            std::fprintf(stderr, "omawrite: unrecognized option '%s'\n\n%s",
+                         argument.constData(), usage);
+            return 1;
+        }
+    }
+    return -1;
+}
+
 // Copies upstream settings once so existing standalone users keep their workspace preferences.
 void migrateLegacySettings() {
     QSettings current;
@@ -35,6 +63,10 @@ void migrateLegacySettings() {
 }
 
 int main(int argc, char *argv[]) {
+    const int earlyExit = commandLineExitCode(argc, argv);
+    if (earlyExit >= 0)
+        return earlyExit;
+
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("omawrite-standalone"));
     app.setApplicationDisplayName(QStringLiteral("Omawrite Standalone"));
@@ -96,9 +128,16 @@ int main(int argc, char *argv[]) {
 
     backend.setParentWindow(qobject_cast<QWindow *>(engine.rootObjects().constFirst()));
 
+    QString requestedPath;
     const QStringList args = app.arguments();
-    if (args.size() > 1) {
-        const QUrl requestedFile = QUrl::fromLocalFile(args.at(1));
+    for (int i = 1; i < args.size(); ++i) {
+        if (args.at(i) == QStringLiteral("--"))
+            continue;
+        requestedPath = args.at(i);
+        break;
+    }
+    if (!requestedPath.isEmpty()) {
+        const QUrl requestedFile = QUrl::fromLocalFile(requestedPath);
         if (backend.modified()) {
             QMetaObject::invokeMethod(engine.rootObjects().constFirst(), "requestOpen",
                                       Q_ARG(QVariant, QVariant::fromValue(requestedFile)));

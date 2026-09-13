@@ -30,6 +30,13 @@ We have ported and integrated key upstream pull requests from [omacom-io/omawrit
 - **[PR #17](https://github.com/omacom-io/omawrite/pull/17): Focus mode** — Adds typewriter scrolling and paragraph dimming via `Ctrl+Shift+T`.
 - **[PR #18](https://github.com/omacom-io/omawrite/pull/18): Viewport clamp** — Prevents editor clipping and horizontal text overflow in narrow window sizes.
 - **[PR #22](https://github.com/omacom-io/omawrite/pull/22): File explorer sidebar** — Adds collapsible folder file tree view via `Ctrl+E`.
+- **[PR #34](https://github.com/omacom/omawrite/pull/34): TOML inline comments** — Reads annotated theme values correctly.
+- **[PR #43](https://github.com/omacom/omawrite/pull/43): Opaque footer** — Keeps document text clear of footer controls.
+- **[PR #48](https://github.com/omacom/omawrite/pull/48): Literal inline code** — Prevents Markdown styling inside code spans.
+- **[PR #50](https://github.com/omacom/omawrite/pull/50): Network-share saving** — Falls back safely when atomic saves are unavailable.
+- **[PR #52](https://github.com/omacom/omawrite/pull/52): CJK word counts** — Counts Han and kana writing accurately.
+- **[PR #57](https://github.com/omacom/omawrite/pull/57): Qt 6.4 compatibility** — Builds on Ubuntu 24.04 LTS.
+- **[PR #61](https://github.com/omacom/omawrite/pull/61): Dialog shortcuts** — Adds direct Cancel, Discard, and Save keys.
 
 ### Standalone Exclusive Features
 - **Distro-Independent & Portal Theming:** Native desktop integration via standard XDG desktop portals or standalone config without requiring Omarchy D-Bus services.
@@ -38,7 +45,7 @@ We have ported and integrated key upstream pull requests from [omacom-io/omawrit
 - **Auto-Pairing & Selection Wrapping:** Automatically pairs brackets `()`, `[]`, `{}`, quotes `""`, `''`, and wraps highlighted selections without interfering with triple-backtick fences.
 - **Interactive Task Lists:** Smart `- [ ]` and `- [x]` task continuation on `Enter`, with instant toggling via `Ctrl+Shift+C`.
 - **Extended Writing Statistics HUD:** Hovering over the bottom-right word count reveals a detailed card with word count, character count, paragraph count, and reading time.
-- **Dynamic Text Zooming HUD:** Zoom in and out dynamically (`Ctrl++` / `Ctrl+-` / `Ctrl+0`) with a transient visual scale overlay.
+- **Persistent Text Zooming HUD:** Adjust editor text independently (`Ctrl++` / `Ctrl+-` / `Ctrl+0`) with a transient scale overlay.
 - **Live TOML Theming & Custom Fonts:** Supports live-reloading colors and fonts via `~/.config/omawrite/config.toml`.
 - **Syntax Highlighting for 20 Languages:** Native code block syntax highlighting for Bash/Shell, C, C++, C#, Go, Java, JavaScript, JSON, Lua, Nim, Pascal, PHP, Python, Ruby, Rust, SQL, TOML, TypeScript, YAML, and Zig.
 
@@ -95,6 +102,15 @@ selection  = "#33467c"
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / Redo |
 | `Ctrl+?` | Display Keyboard Shortcut HUD |
 | `Ctrl+Q` / `Ctrl+W` | Quit / Close Window |
+
+The unsaved-changes dialog accepts `C`, `D`, and `S` for Cancel, Discard, and Save.
+
+### Command Line
+
+```text
+omawrite [FILE]
+omawrite --help
+```
 
 ---
 
