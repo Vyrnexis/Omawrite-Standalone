@@ -1237,7 +1237,6 @@ void Backend::loadThemeConfig() {
         m_highlighter->setColors(m_themeBackground, m_themeForeground, m_themeAccent,
                                  m_themeCodeBackground);
     }
-
     emit themeColorsChanged();
 }
 
@@ -1437,29 +1436,56 @@ void Backend::reapplyTypographyToChange() {
     const int start = qBound(0, m_lastChangePos, maxPos);
     const int end = qBound(start, m_lastChangePos + m_lastChangeAdded, maxPos);
 
-    // Opening or closing a fence changes which later blocks are code, so those
-    // blocks need their heading indent recomputed too.
-    bool touchesFence = false;
-    for (QTextBlock block = m_document->findBlock(start);
-         block.isValid() && block.position() <= end; block = block.next()) {
-        const QString text = block.text();
-        if (text.contains(QStringLiteral("```")) || text.contains(QStringLiteral("~~~"))) {
-            touchesFence = true;
-            break;
-        }
-    }
-
     m_formattingTypography = true;
     QTextCursor cursor(m_document);
     cursor.joinPreviousEditBlock();
     for (QTextBlock block = m_document->findBlock(start); block.isValid(); block = block.next()) {
-        cursor.setPosition(block.position());
-        cursor.mergeBlockFormat(blockFormatWithTypography(block));
-        if (block.position() + block.length() > end && !touchesFence)
+        const QTextBlockFormat wanted = blockFormatWithTypography(block);
+        const QTextBlockFormat current = block.blockFormat();
+        const bool differs = current.indent() != wanted.indent();
+        // Opening or closing a fence flips every later block between code and
+        // prose, so keep going past the edit until a block already matches.
+        if (block.position() + block.length() > end && !differs)
             break;
+        cursor.setPosition(block.position());
+        cursor.mergeBlockFormat(wanted);
     }
     cursor.endEditBlock();
     m_formattingTypography = false;
+}
+
+
+// Whether the block is part of a fenced code block, closing fence included.
+static bool isFencedCodeBlock(const QTextBlock &block) {
+    return block.userState() > 0
+        || (block.previous().isValid() && block.previous().userState() > 0);
+}
+
+// Document ranges of fenced code, fences included, for the editor to paint
+// panels behind. Qt Quick's TextEdit does not draw block backgrounds, and a
+// character background would stripe around the line spacing.
+QVariantList Backend::codeBlockRanges() const {
+    QVariantList ranges;
+    if (!m_document)
+        return ranges;
+    int start = -1;
+    int end = 0;
+    for (QTextBlock block = m_document->firstBlock(); block.isValid(); block = block.next()) {
+        if (isFencedCodeBlock(block)) {
+            if (start < 0)
+                start = block.position();
+            end = block.position() + block.text().size();
+        } else if (start >= 0) {
+            ranges.append(QVariantMap{{QStringLiteral("start"), start},
+                                      {QStringLiteral("end"), end}});
+            start = -1;
+        }
+    }
+    if (start >= 0) {
+        ranges.append(QVariantMap{{QStringLiteral("start"), start},
+                                  {QStringLiteral("end"), end}});
+    }
+    return ranges;
 }
 
 // Builds the shared line-height and hanging heading-indent format for a block.
@@ -1472,5 +1498,6 @@ QTextBlockFormat Backend::blockFormatWithTypography(const QTextBlock &block) con
         : MarkdownHighlighter::headingMarkup(block.text());
     format.setIndent(heading.level > 0 ? qMax(0, headingGutterCells - heading.prefixLength)
                                        : headingGutterCells);
+
     return format;
 }

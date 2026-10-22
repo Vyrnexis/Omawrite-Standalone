@@ -61,6 +61,7 @@ We have ported and integrated key upstream pull requests from [omacom-io/omawrit
 - **Extended Writing Statistics HUD:** Hovering over the bottom-right word count reveals a detailed card with word count, character count, paragraph count, and reading time.
 - **Persistent Text Zooming HUD:** Adjust editor text independently (`Ctrl++` / `Ctrl+-` / `Ctrl+0`) with a transient scale overlay.
 - **Live TOML Theming & Custom Fonts:** Supports live-reloading colors and fonts via `~/.config/omawrite/config.toml`.
+- **Solid Code Panels:** Fenced code sits on one continuous theme-coloured panel (`code_background`) instead of per-line stripes.
 - **Syntax Highlighting for 20 Languages:** Native code block syntax highlighting for Bash/Shell, C, C++, C#, Go, Java, JavaScript, JSON, Lua, Nim, Pascal, PHP, Python, Ruby, Rust, SQL, TOML, TypeScript, YAML, and Zig.
 
 ---

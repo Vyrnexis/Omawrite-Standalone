@@ -715,6 +715,29 @@ private slots:
         QCOMPARE(document.toPlainText(), QStringLiteral("# Heading\nBody"));
     }
 
+    // Verifies fenced code, fences included, is reported as one range per block.
+    void reportsFencedCodeRanges() {
+        Backend backend;
+        QTextDocument document(QStringLiteral("prose\n```\ncode\n\nmore\n```\nafter\n~~~\nopen"));
+        document.documentLayout();
+        backend.attachTextDocument(&document);
+
+        const QVariantList ranges = backend.codeBlockRanges();
+        QCOMPARE(ranges.size(), 2);
+        // From the opening fence through the closing fence, blank line included.
+        QCOMPARE(ranges.at(0).toMap().value(QStringLiteral("start")).toInt(), 6);
+        QCOMPARE(ranges.at(0).toMap().value(QStringLiteral("end")).toInt(), 24);
+        // An unterminated fence runs to the end of the document.
+        QCOMPARE(ranges.at(1).toMap().value(QStringLiteral("end")).toInt(),
+                 document.characterCount() - 1);
+
+        QTextCursor cursor(document.findBlockByNumber(1));
+        cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+        cursor.insertText(QStringLiteral("``"));
+        QVERIFY(backend.editorTextChanged());
+        QCOMPARE(backend.codeBlockRanges().size(), 1);  // the later ``` now opens
+    }
+
     // Verifies comment lines inside fenced code keep the body indent.
     void doesNotOutdentHashLinesInsideFences() {
         Backend backend;

@@ -27,6 +27,7 @@ ApplicationWindow {
     // the app at the sizes it was designed around.
     readonly property real textScale: backend.textScale
     readonly property int editorFontPixelSize: scaledSize(backend.editorFontSize)
+    onEditorFontPixelSizeChanged: codePanelTimer.restart()
     readonly property real headingCellWidth: writerFontMetrics.advanceWidth("#")
     readonly property real headingGutterWidth: headingCellWidth * backend.headingGutterCells
     // Never wider than the Flickable's viewport, whatever the floor asks for:
@@ -46,6 +47,7 @@ ApplicationWindow {
     property string pendingAction: ""
     property bool replaceOpen: false
     property bool previewMode: false
+    property var codePanels: []
     property int normalX: -1
     property int normalY: -1
     property int normalWidth: 1280
@@ -73,6 +75,26 @@ ApplicationWindow {
 
     function toggleSidebar() {
         setSidebarOpen(!sidebarOpen);
+    }
+
+    // Fenced code is painted as one panel behind the editor: Qt Quick's TextEdit
+    // draws no block backgrounds, and a character background stripes around
+    // the line spacing.
+    function refreshCodePanels() {
+        var panels = [];
+        var ranges = backend.codeBlockRanges();
+        for (var i = 0; i < ranges.length; ++i) {
+            var first = editor.positionToRectangle(ranges[i].start);
+            var last = editor.positionToRectangle(ranges[i].end);
+            panels.push({ top: first.y, height: last.y + last.height - first.y });
+        }
+        codePanels = panels;
+    }
+
+    Timer {
+        id: codePanelTimer
+        interval: 30
+        onTriggered: win.refreshCodePanels()
     }
 
     function togglePreview() {
@@ -877,6 +899,20 @@ ApplicationWindow {
                     scrollTo(Math.max(0, cursorTop - margin));
             }
 
+            Repeater {
+                model: win.codePanels
+                delegate: Rectangle {
+                    required property var modelData
+                    visible: !win.previewMode
+                    x: editor.x + win.headingGutterWidth - win.headingCellWidth
+                    y: editor.y + modelData.top - 8
+                    width: editor.bodyWidth + 2 * win.headingCellWidth
+                    height: modelData.height + 8
+                    radius: 4
+                    color: backend.themeCodeBackground
+                }
+            }
+
             TextEdit {
                 id: editor
                 objectName: "sourceEditor"
@@ -911,6 +947,8 @@ ApplicationWindow {
                     width: 1
                     color: win.strongTextColor
                 }
+                onContentHeightChanged: codePanelTimer.restart()
+                onWidthChanged: codePanelTimer.restart()
                 onCursorRectangleChanged: editorFlick.ensureCursorVisible()
                 onYChanged: if (backend.focusMode) editorFlick.ensureCursorVisible()
                 onCursorPositionChanged: {
@@ -1422,6 +1460,7 @@ ApplicationWindow {
                     if (win.searchUpdating)
                         return;
                     var contentChanged = backend.editorTextChanged();
+                    codePanelTimer.restart();
                     if (win.previewMode && contentChanged)
                         backend.renderPreview(preview.textDocument);
                     if (win.searchOpen && contentChanged)

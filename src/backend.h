@@ -127,6 +127,7 @@ public:
     Q_INVOKABLE void toggleFocusMode();
     Q_INVOKABLE void updateCursorPosition(int position);
     Q_INVOKABLE QVariantList documentHeadings() const;
+    Q_INVOKABLE QVariantList codeBlockRanges() const;
     Q_INVOKABLE void renderPreview(QObject *textDocument) const;
     Q_INVOKABLE void setHeadingCellWidth(qreal width);
 

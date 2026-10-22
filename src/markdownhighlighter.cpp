@@ -150,31 +150,26 @@ void MarkdownHighlighter::rebuildFormats() {
 
     m_blockCodeFormat = QTextCharFormat();
     m_blockCodeFormat.setForeground(text);
-    m_blockCodeFormat.setBackground(codeBackground);
-    m_blockCodeFormat.setProperty(QTextFormat::FullWidthSelection, true);
+    // The panel behind fenced code is a block background (see
+    // Backend::blockFormatWithTypography); a character background would only
+    // paint behind each line's text and leave stripes between the lines.
 
     m_keywordFormat = QTextCharFormat();
     m_keywordFormat.setForeground(keyword);
-    m_keywordFormat.setBackground(codeBackground);
     m_keywordFormat.setFontWeight(QFont::Bold);
 
     m_stringFormat = QTextCharFormat();
     m_stringFormat.setForeground(string);
-    m_stringFormat.setBackground(codeBackground);
 
     m_commentFormat = QTextCharFormat();
     m_commentFormat.setForeground(comment);
-    m_commentFormat.setBackground(codeBackground);
     m_commentFormat.setFontItalic(true);
 
     m_invisibleTextFormat = QTextCharFormat();
     m_invisibleTextFormat.setForeground(codeBackground);
-    m_invisibleTextFormat.setBackground(codeBackground);
-    m_invisibleTextFormat.setProperty(QTextFormat::FullWidthSelection, true);
 
     m_codeLanguageLabelFormat = QTextCharFormat();
     m_codeLanguageLabelFormat.setForeground(text);
-    m_codeLanguageLabelFormat.setBackground(codeBackground);
     m_codeLanguageLabelFormat.setFontWeight(QFont::Bold);
 
     m_quoteFormat = QTextCharFormat();
