@@ -1137,7 +1137,8 @@ ApplicationWindow {
                         return;
                     }
 
-                    var pos = Math.max(0, Math.min(length, cursorPosition + direction));
+                    var pos = backend.cursorPositionStep(cursorPosition, direction);
+                    pos = Math.max(0, Math.min(length, pos));
                     cursorPosition = direction > 0
                         ? skipHiddenForward(pos)
                         : skipHiddenBackward(pos);

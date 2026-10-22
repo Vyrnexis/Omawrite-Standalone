@@ -47,6 +47,20 @@ private slots:
         QCOMPARE(shortWord.at(0).content.length, 1);
     }
 
+    // Verifies caret steps cross whole emoji and combining sequences.
+    void stepsCaretOverWholeGraphemes() {
+        Backend backend;
+        QTextDocument document(QStringLiteral("a😀b\ne\u0301x"));
+        backend.attachTextDocument(&document);
+
+        QCOMPARE(backend.cursorPositionStep(1, 1), 3);
+        QCOMPARE(backend.cursorPositionStep(3, -1), 1);
+        QCOMPARE(backend.cursorPositionStep(4, 1), 5);   // across the block break
+        QCOMPARE(backend.cursorPositionStep(5, 1), 7);   // e + combining acute
+        QCOMPARE(backend.cursorPositionStep(7, -1), 5);
+        QCOMPARE(backend.cursorPositionStep(0, -1), 0);
+    }
+
     // Verifies printing converts the editor's pixel size to points.
     void printsInPointsNotPixels() {
         QFont editorFont;

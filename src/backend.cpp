@@ -27,6 +27,7 @@
 #include <QTextBlockFormat>
 #include <QTextCursor>
 #include <QTextDocument>
+#include <QTextLayout>
 #include <QTextList>
 #include <QTextStream>
 #include <QUrl>
@@ -535,6 +536,36 @@ bool Backend::editorTextChanged() {
         scheduleRecovery();
     }
     return true;
+}
+
+// Steps one grapheme cluster from a caret position, so emoji and combining
+// sequences are crossed whole instead of being split mid-cluster.
+int Backend::cursorPositionStep(int position, int direction) const {
+    if (!m_document || direction == 0)
+        return position;
+
+    const int documentLength = m_document->characterCount() - 1;
+    position = qBound(0, position, documentLength);
+    if (direction > 0 ? position >= documentLength : position <= 0)
+        return direction > 0 ? documentLength : 0;
+
+    const QTextBlock block = m_document->findBlock(position);
+    if (!block.isValid())
+        return position + (direction > 0 ? 1 : -1);
+
+    const int blockStart = block.position();
+    const int blockTextLength = block.text().size();
+    // The paragraph separator is the next caret position past a block's text.
+    if (direction > 0 ? position >= blockStart + blockTextLength : position <= blockStart)
+        return position + (direction > 0 ? 1 : -1);
+
+    // An unformatted layout over the block text is enough to step by clusters.
+    QTextLayout layout(block.text());
+    const int local = position - blockStart;
+    const int stepped = direction > 0
+        ? layout.nextCursorPosition(local, QTextLayout::SkipCharacters)
+        : layout.previousCursorPosition(local, QTextLayout::SkipCharacters);
+    return blockStart + qBound(0, stepped, blockTextLength);
 }
 
 QVariantList Backend::hiddenRangesAt(int position) const {

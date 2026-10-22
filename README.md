@@ -44,6 +44,7 @@ We have ported and integrated key upstream pull requests from [omacom-io/omawrit
 - **[PR #115](https://github.com/omacom-io/omawrite/pull/115): Nested lists** — `Tab` / `Shift+Tab` nest and lift list items, alone or across a selection.
 - **[PR #89](https://github.com/omacom-io/omawrite/pull/89): Stray asterisks** — `2 * 3 * 4` and `* bullet *emphasis*` no longer pair stray `*` as italics.
 - **[PR #67](https://github.com/omacom-io/omawrite/pull/67): Print in points** — Printed text matches the editor's size instead of using device dots.
+- **[PR #88](https://github.com/omacom-io/omawrite/pull/88): Grapheme-aware caret** — Arrow keys step over whole emoji and combining sequences instead of splitting them.
 - **[PR #125](https://github.com/omacom-io/omawrite/pull/125): Find bar and input methods** — `Ctrl+F` keeps working after closing the find bar with an input method.
 
 ### Standalone Exclusive Features
