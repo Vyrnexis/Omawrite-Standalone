@@ -145,20 +145,17 @@ ApplicationWindow {
     }
 
     function updateSearch() {
-        var matches = [];
-        var query = searchField.text;
-        if (query.length > 0) {
-            var haystack = editor.getText(0, editor.length).toLocaleLowerCase();
-            var needle = query.toLocaleLowerCase();
-            var position = 0;
-            while ((position = haystack.indexOf(needle, position)) !== -1) {
-                matches.push(position);
-                position += Math.max(1, needle.length);
-            }
-        }
-        searchMatches = matches;
-        searchMatchIndex = matches.length > 0 ? 0 : -1;
+        searchDelay.stop();
+        searchMatches = backend.searchMatches(searchField.text);
+        searchMatchIndex = searchMatches.length > 0 ? 0 : -1;
         showSearchMatch();
+    }
+
+    // Typing in the search field waits for a pause before searching, so
+    // anything that acts on the matches catches up with the field first.
+    function flushSearch() {
+        if (searchDelay.running)
+            updateSearch();
     }
 
     function showSearchMatch() {
@@ -173,6 +170,12 @@ ApplicationWindow {
     }
 
     function moveSearch(direction) {
+        // A pending search lands on its first match, which is where the
+        // writer meant to go, rather than one past it.
+        if (searchDelay.running) {
+            updateSearch();
+            return;
+        }
         if (searchMatches.length === 0)
             return;
         searchMatchIndex = (searchMatchIndex + direction + searchMatches.length)
@@ -181,6 +184,7 @@ ApplicationWindow {
     }
 
     function closeSearch() {
+        searchDelay.stop();
         // Hand focus to the editor before hiding the bar. Hiding the field
         // that holds focus leaves the input method with nothing focused for
         // a moment, and fcitx5 can then miss the next Ctrl+F.
@@ -192,6 +196,14 @@ ApplicationWindow {
         editor.deselect();
         searchUpdating = false;
         replaceOpen = false;
+    }
+
+    // Restyling a large document for each letter typed makes typing a word
+    // stall, so the search waits until the typing pauses.
+    Timer {
+        id: searchDelay
+        interval: 150
+        onTriggered: win.updateSearch()
     }
 
     Shortcut {
@@ -1768,7 +1780,7 @@ ApplicationWindow {
                         selectedTextColor: win.strongTextColor
                         font.pixelSize: win.scaledSize(17)
                         clip: true
-                        onTextChanged: win.updateSearch()
+                        onTextChanged: searchDelay.restart()
                         Keys.onReturnPressed: function(event) {
                             win.moveSearch((event.modifiers & Qt.ShiftModifier) ? -1 : 1);
                             event.accepted = true;
@@ -1828,6 +1840,7 @@ ApplicationWindow {
                     visible: win.replaceOpen
                     text: "Replace"
                     onClicked: {
+                        win.flushSearch();
                         if (win.searchMatchIndex < 0) return;
                         var start = win.searchMatches[win.searchMatchIndex];
                         EditorMutations.replaceRange(editor, start,
@@ -1841,6 +1854,7 @@ ApplicationWindow {
                     visible: win.replaceOpen
                     text: "All"
                     onClicked: {
+                        win.flushSearch();
                         if (searchField.text.length === 0) return;
                         win.searchUpdating = true;
                         for (var i = win.searchMatches.length - 1; i >= 0; --i) {

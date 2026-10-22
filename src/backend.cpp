@@ -723,6 +723,17 @@ QUrl Backend::resolveImageUrl(const QString &rawUrl) const {
     return QUrl::fromLocalFile(defaultDirectory().filePath(trimmed));
 }
 
+// Found by the highlighter's own matcher, so the offsets agree with what it
+// paints, diacritics and all.
+QVariantList Backend::searchMatches(const QString &query) const {
+    QVariantList matches;
+    if (query.isEmpty())
+        return matches;
+    for (const int start : MarkdownHighlighter::findMatches(currentDocumentText(), query))
+        matches.append(start);
+    return matches;
+}
+
 void Backend::setSearchHighlight(const QString &query, int currentMatchStart) {
     if (m_highlighter)
         m_highlighter->setSearch(query, currentMatchStart);

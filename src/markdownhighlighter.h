@@ -48,6 +48,13 @@ public:
     static QString linkUrlAt(const QString &text, int position);
     static QString imageUrlAt(const QString &text, int position);
 
+    // Where query occurs in text, ignoring case and, for the query's plain
+    // Latin and Greek letters, diacritics: "tara" finds "țară". An accented
+    // letter in the query matches only itself, though ş and ș, ţ and ț count
+    // as one. Folding keeps one UTF-16 unit per unit, so offsets and lengths
+    // are the text's own.
+    static QList<int> findMatches(const QString &text, const QString &query);
+
 protected:
     void highlightBlock(const QString &text) override;
 

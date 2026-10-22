@@ -99,6 +99,25 @@ private slots:
                 < nested.value(QStringLiteral("end")).toInt());
     }
 
+    // Verifies search ignores case and diacritics the query leaves out.
+    void searchIgnoresDiacriticsTheQueryLeavesOut() {
+        using Matches = QList<int>;
+        const auto find = [](const QString &text, const QString &query) {
+            return MarkdownHighlighter::findMatches(text, query);
+        };
+
+        QCOMPARE(find(QStringLiteral("Țară țara TARA"), QStringLiteral("tara")),
+                 (Matches{0, 5, 10}));
+        // An accented letter in the query matches only itself.
+        QCOMPARE(find(QStringLiteral("tara țară"), QStringLiteral("ț")), (Matches{5}));
+        QCOMPARE(find(QStringLiteral("ş ș"), QStringLiteral("ș")), (Matches{0, 2}));
+        // Marks that distinguish letters in other scripts are kept.
+        QCOMPARE(find(QStringLiteral("и й"), QStringLiteral("и")), (Matches{0}));
+        // Matches do not overlap.
+        QCOMPARE(find(QStringLiteral("aaaa"), QStringLiteral("aa")), (Matches{0, 2}));
+        QVERIFY(find(QStringLiteral("abc"), QString()).isEmpty());
+    }
+
     // Verifies printing converts the editor's pixel size to points.
     void printsInPointsNotPixels() {
         QFont editorFont;
