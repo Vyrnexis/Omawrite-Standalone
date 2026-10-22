@@ -41,6 +41,10 @@ We have ported and integrated key upstream pull requests from [omacom-io/omawrit
 - **[PR #61](https://github.com/omacom-io/omawrite/pull/61): Dialog shortcuts** — Adds direct Cancel, Discard, and Save keys.
 - **[PR #5](https://github.com/omacom-io/omawrite/pull/5): Outdented headings** — Places heading markers in a gutter so heading text aligns with body copy.
 - **[PR #2](https://github.com/omacom-io/omawrite/pull/2): Code panel colors** — Uses a theme-aware background for inline and fenced code without replacing the newer parser.
+- **[PR #115](https://github.com/omacom-io/omawrite/pull/115): Nested lists** — `Tab` / `Shift+Tab` nest and lift list items, alone or across a selection.
+- **[PR #89](https://github.com/omacom-io/omawrite/pull/89): Stray asterisks** — `2 * 3 * 4` and `* bullet *emphasis*` no longer pair stray `*` as italics.
+- **[PR #67](https://github.com/omacom-io/omawrite/pull/67): Print in points** — Printed text matches the editor's size instead of using device dots.
+- **[PR #125](https://github.com/omacom-io/omawrite/pull/125): Find bar and input methods** — `Ctrl+F` keeps working after closing the find bar with an input method.
 
 ### Standalone Exclusive Features
 - **Distro-Independent & Portal Theming:** Native desktop integration via standard XDG desktop portals or standalone config without requiring Omarchy D-Bus services.

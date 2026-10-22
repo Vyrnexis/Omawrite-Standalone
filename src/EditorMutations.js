@@ -4,6 +4,16 @@ function normalizePlainText(text) {
     return text.replace(/\r\n/g, "\u2029").replace(/[\r\n]/g, "\u2029");
 }
 
+// The rich-text editor reads inserted text as HTML, which drops leading and
+// repeated spaces. Text holding such runs goes in as a whitespace-preserving span.
+function insertableText(text) {
+    if (!/^[ \t]|[ \t]{2}|\t|\u2029[ \t]/.test(text))
+        return text;
+    return "<span style=\"white-space: pre-wrap\">"
+        + text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        + "</span>";
+}
+
 function toggleWrap(editor, before, after) {
     var start = Math.min(editor.selectionStart, editor.selectionEnd);
     var end = Math.max(editor.selectionStart, editor.selectionEnd);
@@ -34,7 +44,7 @@ function replaceRange(editor, rangeStart, rangeEnd, replacement,
         editor.remove(start, end);
 
     editor.cursorPosition = start;
-    editor.insert(start, insertedText);
+    editor.insert(start, insertableText(insertedText));
 
     // TextEdit.insert() already leaves the caret after the inserted text. Only
     // move it again when the caller deliberately requests a selection/caret

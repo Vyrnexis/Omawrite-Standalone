@@ -181,13 +181,17 @@ ApplicationWindow {
     }
 
     function closeSearch() {
+        // Hand focus to the editor before hiding the bar. Hiding the field
+        // that holds focus leaves the input method with nothing focused for
+        // a moment, and fcitx5 can then miss the next Ctrl+F.
+        Qt.inputMethod.reset();
+        editor.forceActiveFocus();
         searchOpen = false;
         searchUpdating = true;
         backend.setSearchHighlight("", -1);
         editor.deselect();
         searchUpdating = false;
         replaceOpen = false;
-        editor.forceActiveFocus();
     }
 
     Shortcut {
@@ -974,6 +978,69 @@ ApplicationWindow {
                     replaceSelectionWith("\n\n");
                 }
 
+                // Tab nests the list items the caret or selection touches four
+                // spaces deeper, and Shift+Tab lifts them back out by the same
+                // step. Lines that are neither items, their indented
+                // continuations, nor blank, and code fences, leave Tab alone.
+                function indentListItems(outdent) {
+                    var plain = getText(0, length).replace(/[\u2028\u2029]/g, "\n");
+                    // "* * *" and "- - -" are rules, not items.
+                    var listItem = function(line) {
+                        return /^[ \t]*(?:[-+*]|\d+[.)])[ \t]/.test(line)
+                            && !/^ {0,3}([-*])([ \t]*\1){2,}[ \t]*$/.test(line);
+                    };
+                    // A tab runs to the next four-column stop.
+                    var columns = function(line) {
+                        return line.match(/^[ \t]*/)[0].split("").reduce(function(column, c) {
+                            return c === "\t" ? column + 4 - column % 4 : column + 1;
+                        }, 0);
+                    };
+
+                    var selStart = Math.min(selectionStart, selectionEnd);
+                    var selEnd = Math.max(selectionStart, selectionEnd);
+                    // A selection that ends at the start of a line leaves it be.
+                    // lastIndexOf would read -1 as 0, a newline right there.
+                    var start = selStart > 0 ? plain.lastIndexOf("\n", selStart - 1) + 1 : 0;
+                    var end = plain.indexOf("\n", Math.max(start, selEnd - 1));
+                    if (end < 0)
+                        end = plain.length;
+                    var lines = plain.slice(start, end).split("\n");
+                    // The selection starts at an item and holds only lines that
+                    // belong to one: other items, blanks, and indented lines.
+                    // A fence indented under an item moves along with it whole;
+                    // a selection that starts or ends inside code would split it.
+                    var filled = lines.filter(function(line) { return /\S/.test(line); });
+                    if (!listItem(filled[0] || "")
+                        || filled.some(function(line) { return /^\S/.test(line) && !listItem(line); })
+                        || insideFence(plain.slice(0, start))
+                        || insideFence(plain.slice(0, end)))
+                        return false;
+
+                    // Every line moves by the same step, so the nesting within
+                    // the selection is kept. Four spaces nest under any marker
+                    // up to "99.", and Shift+Tab lifts no further than the
+                    // shallowest line can go.
+                    var step = outdent ? -Math.min.apply(null, [4].concat(filled.map(columns))) : 4;
+                    if (step === 0)
+                        return true;
+                    var moved = lines.map(function(line) {
+                        var lead = line.match(/^[ \t]*/)[0];
+                        return /\S/.test(line)
+                            ? " ".repeat(columns(line) + step) + line.slice(lead.length)
+                            : line;
+                    });
+                    var nested = moved.join("\n");
+                    var from = Math.max(start, selStart + moved[0].length - lines[0].length);
+                    // Neither end of the selection leaves its line, even when
+                    // the indent it sat in is gone.
+                    var lastStart = start + nested.length - moved[moved.length - 1].length;
+                    var to = Math.max(from, lastStart, selEnd + nested.length - (end - start));
+                    var forward = cursorPosition === selEnd;
+                    EditorMutations.replaceRange(editor, start, end, nested);
+                    select(forward ? from : to, forward ? to : from);
+                    return true;
+                }
+
                 // Reports whether the caret follows an unmatched Markdown fence.
                 function insideFence(before) {
                     var fenceChar = "";
@@ -1253,6 +1320,12 @@ ApplicationWindow {
                     } else if (!commandModifier && !(event.modifiers & Qt.ShiftModifier)
                                && event.key === Qt.Key_Left) {
                         moveCursorVisibly(-1);
+                        event.accepted = true;
+                        return;
+                    } else if (!commandModifier
+                               && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)
+                               && indentListItems(event.key === Qt.Key_Backtab
+                                                  || (event.modifiers & Qt.ShiftModifier))) {
                         event.accepted = true;
                         return;
                     } else if (!commandModifier

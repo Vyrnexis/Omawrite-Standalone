@@ -31,6 +31,36 @@ private slots:
         QVERIFY(qputenv("XDG_CONFIG_HOME", configRoot.toUtf8()));
     }
 
+    // A stray asterisk next to whitespace is not an emphasis delimiter.
+    void keepsWhitespaceDelimitedAsterisksLiteral() {
+        const auto bullet = MarkdownHighlighter::inlineMarkup(
+            QStringLiteral("* first *important* point"));
+        QCOMPARE(bullet.size(), 1);
+        QCOMPARE(bullet.at(0).kind, MarkdownHighlighter::InlineKind::Italic);
+        QCOMPARE(bullet.at(0).content.start, 9);
+        QCOMPARE(bullet.at(0).content.length, 9);
+
+        QCOMPARE(MarkdownHighlighter::inlineMarkup(QStringLiteral("2 * 3 * 4")).size(), 0);
+
+        const auto shortWord = MarkdownHighlighter::inlineMarkup(QStringLiteral("*a*"));
+        QCOMPARE(shortWord.size(), 1);
+        QCOMPARE(shortWord.at(0).content.length, 1);
+    }
+
+    // Verifies printing converts the editor's pixel size to points.
+    void printsInPointsNotPixels() {
+        QFont editorFont;
+        editorFont.setPixelSize(20);
+        const QFont printed = Backend::printFont(editorFont, 96.0);
+        QCOMPARE(printed.pixelSize(), -1);
+        QCOMPARE(printed.pointSizeF(), 15.0);
+        QCOMPARE(Backend::printFont(editorFont, 0.0).pointSizeF(), 15.0);
+
+        QFont pointFont;
+        pointFont.setPointSizeF(11.0);
+        QCOMPARE(Backend::printFont(pointFont, 144.0).pointSizeF(), 11.0);
+    }
+
     void countsWords() {
         QCOMPARE(Backend::countWords(QStringLiteral("one two-three don't 42")), 4);
         QCOMPARE(Backend::countWords(QStringLiteral("你好世界")), 4);
@@ -330,6 +360,19 @@ private slots:
         QTest::keyClick(window, Qt::Key_Return);
         QCOMPARE(quickDocument->textDocument()->toPlainText(),
                  QStringLiteral("~~~\n- literal\n"));
+
+        // Tab nests list items, Shift+Tab lifts them, and plain text keeps its tab.
+        auto plainText = [&] { return quickDocument->textDocument()->toPlainText(); };
+        quickDocument->textDocument()->setPlainText(QStringLiteral("- one\n- two"));
+        editor->setProperty("cursorPosition", 11);
+        QTest::keyClick(window, Qt::Key_Tab);
+        QCOMPARE(plainText(), QStringLiteral("- one\n    - two"));
+        QTest::keyClick(window, Qt::Key_Backtab, Qt::ShiftModifier);
+        QCOMPARE(plainText(), QStringLiteral("- one\n- two"));
+        quickDocument->textDocument()->setPlainText(QStringLiteral("```\n- a\n```"));
+        editor->setProperty("cursorPosition", 7);
+        QTest::keyClick(window, Qt::Key_Tab);
+        QCOMPARE(plainText(), QStringLiteral("```\n- a\t\n```"));
 
         QCOMPARE(backend.editorFontSize(), 20);
         QTest::keyClick(window, Qt::Key_Equal, Qt::ControlModifier);

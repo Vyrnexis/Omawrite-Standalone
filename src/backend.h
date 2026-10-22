@@ -13,6 +13,7 @@
 
 class MarkdownHighlighter;
 class QTextDocument;
+class QFont;
 class QTextBlock;
 class QTextBlockFormat;
 class QWindow;
@@ -81,6 +82,7 @@ public:
     QString folderName() const;
     bool folderHasParent() const;
     QVariantList folderEntries() const;
+    static QFont printFont(const QFont &editorFont, qreal screenDpi);
     static int countWords(const QString &text);
     static QString normalizedLinkUrl(const QString &clipboardText);
     static QString suggestedFileName(const QString &text);

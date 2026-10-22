@@ -412,7 +412,7 @@ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const
     }
 
     static const QRegularExpression italicRe(
-        QStringLiteral("(?<![\\\\*])\\*([^*\\n]+)\\*(?!\\*)|(?<![\\\\_])_([^_\\n]+)_(?!_)"));
+        QStringLiteral("(?<![\\\\*])\\*(?![\\s*])([^*\\n]*[^\\s*])\\*(?!\\*)|(?<![\\\\_])_([^_\\n]+)_(?!_)"));
     QRegularExpressionMatchIterator italicMatches = italicRe.globalMatch(text);
     while (italicMatches.hasNext()) {
         const QRegularExpressionMatch match = italicMatches.next();
