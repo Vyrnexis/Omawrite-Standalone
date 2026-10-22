@@ -13,6 +13,8 @@
 
 class MarkdownHighlighter;
 class QTextDocument;
+class QTextBlock;
+class QTextBlockFormat;
 class QWindow;
 class QLockFile;
 
@@ -35,6 +37,8 @@ class Backend : public QObject {
     Q_PROPERTY(QString themeForeground READ themeForeground NOTIFY themeColorsChanged)
     Q_PROPERTY(QString themeAccent READ themeAccent NOTIFY themeColorsChanged)
     Q_PROPERTY(QString themeSelection READ themeSelection NOTIFY themeColorsChanged)
+    Q_PROPERTY(QString themeCodeBackground READ themeCodeBackground NOTIFY themeColorsChanged)
+    Q_PROPERTY(int headingGutterCells READ headingGutterCellCount CONSTANT)
     Q_PROPERTY(bool focusMode READ focusMode NOTIFY focusModeChanged)
     Q_PROPERTY(QUrl folderUrl READ folderUrl NOTIFY folderChanged)
     Q_PROPERTY(QString folderName READ folderName NOTIFY folderChanged)
@@ -69,6 +73,9 @@ public:
     QString themeForeground() const { return m_themeForeground; }
     QString themeAccent() const { return m_themeAccent; }
     QString themeSelection() const { return m_themeSelection; }
+    QString themeCodeBackground() const { return m_themeCodeBackground; }
+    static constexpr int headingGutterCells = 7;
+    int headingGutterCellCount() const { return headingGutterCells; }
     bool focusMode() const { return m_focusMode; }
     QUrl folderUrl() const { return m_folderUrl; }
     QString folderName() const;
@@ -113,6 +120,8 @@ public:
     Q_INVOKABLE void toggleFocusMode();
     Q_INVOKABLE void updateCursorPosition(int position);
     Q_INVOKABLE QVariantList documentHeadings() const;
+    Q_INVOKABLE void renderPreview(QObject *textDocument) const;
+    Q_INVOKABLE void setHeadingCellWidth(qreal width);
 
 signals:
     void fileUrlChanged();
@@ -147,6 +156,7 @@ private:
     void scheduleWordCount();
     void applyDocumentTypography();
     void reapplyTypographyToChange();
+    QTextBlockFormat blockFormatWithTypography(const QTextBlock &block) const;
     void scheduleRecovery();
     void writeRecovery();
     void restoreRecovery();
@@ -174,9 +184,9 @@ private:
     QString m_fontFamily = QStringLiteral("iA Writer Mono S");
     bool m_loading = false;
     bool m_formattingTypography = false;
-    int m_formattedBlockCount = 0;
     int m_lastChangePos = 0;
     int m_lastChangeAdded = 0;
+    qreal m_headingCellWidth = 1.0;
     QTimer m_wordCountTimer;
     QTimer m_recoveryTimer;
     QFileSystemWatcher m_fileWatcher;
@@ -196,5 +206,6 @@ private:
     QString m_themeForeground;
     QString m_themeAccent;
     QString m_themeSelection;
+    QString m_themeCodeBackground;
     QFileSystemWatcher m_themeWatcher;
 };

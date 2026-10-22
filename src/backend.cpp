@@ -27,6 +27,7 @@
 #include <QTextBlockFormat>
 #include <QTextCursor>
 #include <QTextDocument>
+#include <QTextList>
 #include <QTextStream>
 #include <QUrl>
 #include <QVariantMap>
@@ -46,6 +47,15 @@ constexpr int minimumEditorFontSize = 10;
 constexpr int maximumEditorFontSize = 48;
 
 enum class AtomicWrite { Written, Failed, NotOpened };
+
+// Blends a subtle code-panel color from the active page and text colors.
+QString blendedCodeBackground(const QString &background, const QString &foreground) {
+    const QColor page(background);
+    const QColor text(foreground);
+    return QColor::fromRgbF(page.redF() * 0.94 + text.redF() * 0.06,
+                            page.greenF() * 0.94 + text.greenF() * 0.06,
+                            page.blueF() * 0.94 + text.blueF() * 0.06).name();
+}
 
 // Writes a document atomically and distinguishes failure before opening.
 AtomicWrite writeDocumentAtomically(const QString &path, const QByteArray &contents) {
@@ -269,7 +279,8 @@ void Backend::attachTextDocument(QTextDocument *document) {
     m_document = document;
     m_highlighter = new MarkdownHighlighter(m_document);
     m_highlighter->setDarkMode(m_darkMode);
-    m_highlighter->setColors(m_themeBackground, m_themeForeground, m_themeAccent);
+    m_highlighter->setColors(m_themeBackground, m_themeForeground, m_themeAccent,
+                             m_themeCodeBackground);
 
     connect(m_document, &QTextDocument::contentsChange, this,
             [this](int position, int, int charsAdded) {
@@ -492,12 +503,8 @@ bool Backend::editorTextChanged() {
     if (m_loading || m_formattingTypography)
         return false;
 
-    if (m_document) {
-        const int blockCount = m_document->blockCount();
-        if (blockCount > m_formattedBlockCount)
-            reapplyTypographyToChange();
-        m_formattedBlockCount = blockCount;
-    }
+    if (m_document)
+        reapplyTypographyToChange();
 
     scheduleWordCount();
     const QString text = currentDocumentText();
@@ -664,6 +671,38 @@ QVariantList Backend::documentHeadings() const {
     }
 
     return list;
+}
+
+// Renders the current Markdown source into a read-only Qt text document.
+void Backend::renderPreview(QObject *textDocument) const {
+    auto *quickDocument = qobject_cast<QQuickTextDocument *>(textDocument);
+    if (!quickDocument || !quickDocument->textDocument())
+        return;
+
+    QTextDocument *preview = quickDocument->textDocument();
+    if (m_document)
+        preview->setDefaultFont(m_document->defaultFont());
+    preview->setMarkdown(currentDocumentText());
+
+    for (QTextBlock block = preview->firstBlock(); block.isValid(); block = block.next()) {
+        QTextBlockFormat format = block.blockFormat();
+        const bool heading = format.headingLevel() > 0;
+        const bool compact = heading || block.textList()
+            || format.intProperty(QTextFormat::BlockQuoteLevel) > 0;
+        format.setTopMargin(heading ? 18 : 0);
+        format.setBottomMargin(compact ? 8 : 14);
+        QTextCursor(block).setBlockFormat(format);
+    }
+}
+
+// Sets the monospace cell used by document indentation and heading outdents.
+void Backend::setHeadingCellWidth(qreal width) {
+    const qreal boundedWidth = qMax<qreal>(1.0, width);
+    if (qFuzzyCompare(m_headingCellWidth, boundedWidth))
+        return;
+    m_headingCellWidth = boundedWidth;
+    if (m_document)
+        m_document->setIndentWidth(m_headingCellWidth);
 }
 
 QVariantMap Backend::windowGeometry() const {
@@ -941,6 +980,7 @@ void Backend::loadThemeConfig() {
     QString foreground;
     QString accent;
     QString selection;
+    QString codeBackground;
     QString configuredFontFamily = QStringLiteral("iA Writer Mono S");
     qreal configuredTextScale = m_systemTextScale;
     bool hasConfiguredTextScale = false;
@@ -971,6 +1011,10 @@ void Backend::loadThemeConfig() {
             } else if (key == QStringLiteral("selection")) {
                 if (QColor(value).isValid())
                     selection = value;
+            } else if (key == QStringLiteral("code_background")
+                       || key == QStringLiteral("lighter_background")) {
+                if (QColor(value).isValid())
+                    codeBackground = value;
             } else if (key == QStringLiteral("text_scale")) {
                 bool ok;
                 const qreal scale = value.toDouble(&ok);
@@ -1017,6 +1061,9 @@ void Backend::loadThemeConfig() {
     if (!foreground.isEmpty()) m_themeForeground = foreground;
     if (!accent.isEmpty()) m_themeAccent = accent;
     if (!selection.isEmpty()) m_themeSelection = selection;
+    m_themeCodeBackground = codeBackground.isEmpty()
+        ? blendedCodeBackground(m_themeBackground, m_themeForeground)
+        : codeBackground;
     if (themeIsDark != m_darkMode) {
         m_darkMode = themeIsDark;
         emit darkModeChanged();
@@ -1024,7 +1071,8 @@ void Backend::loadThemeConfig() {
 
     if (m_highlighter) {
         m_highlighter->setDarkMode(m_darkMode);
-        m_highlighter->setColors(m_themeBackground, m_themeForeground, m_themeAccent);
+        m_highlighter->setColors(m_themeBackground, m_themeForeground, m_themeAccent,
+                                 m_themeCodeBackground);
     }
 
     emit themeColorsChanged();
@@ -1182,31 +1230,23 @@ void Backend::applyDocumentTypography() {
     if (!m_document)
         return;
 
-    QTextBlockFormat blockFormat;
-    blockFormat.setLineHeight(typoraLineHeightPercent, QTextBlockFormat::ProportionalHeight);
-
     // A full pass is only used for freshly loaded/attached documents, so it is
     // safe to drop undo history here (re-enabling clears the stack anyway).
     const bool undoEnabled = m_document->isUndoRedoEnabled();
     m_document->setUndoRedoEnabled(false);
 
     m_formattingTypography = true;
-    QTextCursor cursor(m_document);
-    cursor.select(QTextCursor::Document);
-    cursor.mergeBlockFormat(blockFormat);
+    m_document->setIndentWidth(m_headingCellWidth);
+    for (QTextBlock block = m_document->firstBlock(); block.isValid(); block = block.next())
+        QTextCursor(block).mergeBlockFormat(blockFormatWithTypography(block));
     m_formattingTypography = false;
 
     m_document->setUndoRedoEnabled(undoEnabled);
-
-    m_formattedBlockCount = m_document->blockCount();
 }
 
 void Backend::reapplyTypographyToChange() {
     if (!m_document)
         return;
-
-    QTextBlockFormat blockFormat;
-    blockFormat.setLineHeight(typoraLineHeightPercent, QTextBlockFormat::ProportionalHeight);
 
     // Format only the block(s) touched by the last edit instead of the whole
     // document, and fold the change into the preceding edit command so a single
@@ -1215,12 +1255,40 @@ void Backend::reapplyTypographyToChange() {
     const int start = qBound(0, m_lastChangePos, maxPos);
     const int end = qBound(start, m_lastChangePos + m_lastChangeAdded, maxPos);
 
+    // Opening or closing a fence changes which later blocks are code, so those
+    // blocks need their heading indent recomputed too.
+    bool touchesFence = false;
+    for (QTextBlock block = m_document->findBlock(start);
+         block.isValid() && block.position() <= end; block = block.next()) {
+        const QString text = block.text();
+        if (text.contains(QStringLiteral("```")) || text.contains(QStringLiteral("~~~"))) {
+            touchesFence = true;
+            break;
+        }
+    }
+
     m_formattingTypography = true;
     QTextCursor cursor(m_document);
     cursor.joinPreviousEditBlock();
-    cursor.setPosition(start);
-    cursor.setPosition(end, QTextCursor::KeepAnchor);
-    cursor.mergeBlockFormat(blockFormat);
+    for (QTextBlock block = m_document->findBlock(start); block.isValid(); block = block.next()) {
+        cursor.setPosition(block.position());
+        cursor.mergeBlockFormat(blockFormatWithTypography(block));
+        if (block.position() + block.length() > end && !touchesFence)
+            break;
+    }
     cursor.endEditBlock();
     m_formattingTypography = false;
+}
+
+// Builds the shared line-height and hanging heading-indent format for a block.
+QTextBlockFormat Backend::blockFormatWithTypography(const QTextBlock &block) const {
+    QTextBlockFormat format;
+    format.setLineHeight(typoraLineHeightPercent, QTextBlockFormat::ProportionalHeight);
+    // Lines inside fenced code are never headings (the highlighter marks them with state > 0).
+    const MarkdownHighlighter::HeadingMarkup heading = block.userState() > 0
+        ? MarkdownHighlighter::HeadingMarkup{}
+        : MarkdownHighlighter::headingMarkup(block.text());
+    format.setIndent(heading.level > 0 ? qMax(0, headingGutterCells - heading.prefixLength)
+                                       : headingGutterCells);
+    return format;
 }

@@ -30,13 +30,17 @@ We have ported and integrated key upstream pull requests from [omacom-io/omawrit
 - **[PR #17](https://github.com/omacom-io/omawrite/pull/17): Focus mode** — Adds typewriter scrolling and paragraph dimming via `Ctrl+Shift+T`.
 - **[PR #18](https://github.com/omacom-io/omawrite/pull/18): Viewport clamp** — Prevents editor clipping and horizontal text overflow in narrow window sizes.
 - **[PR #22](https://github.com/omacom-io/omawrite/pull/22): File explorer sidebar** — Adds collapsible folder file tree view via `Ctrl+E`.
-- **[PR #34](https://github.com/omacom/omawrite/pull/34): TOML inline comments** — Reads annotated theme values correctly.
-- **[PR #43](https://github.com/omacom/omawrite/pull/43): Opaque footer** — Keeps document text clear of footer controls.
-- **[PR #48](https://github.com/omacom/omawrite/pull/48): Literal inline code** — Prevents Markdown styling inside code spans.
-- **[PR #50](https://github.com/omacom/omawrite/pull/50): Network-share saving** — Falls back safely when atomic saves are unavailable.
-- **[PR #52](https://github.com/omacom/omawrite/pull/52): CJK word counts** — Counts Han and kana writing accurately.
-- **[PR #57](https://github.com/omacom/omawrite/pull/57): Qt 6.4 compatibility** — Builds on Ubuntu 24.04 LTS.
-- **[PR #61](https://github.com/omacom/omawrite/pull/61): Dialog shortcuts** — Adds direct Cancel, Discard, and Save keys.
+- **[PR #34](https://github.com/omacom-io/omawrite/pull/34): TOML inline comments** — Reads annotated theme values correctly.
+- **[PR #43](https://github.com/omacom-io/omawrite/pull/43): Opaque footer** — Keeps document text clear of footer controls.
+- **[PR #45](https://github.com/omacom-io/omawrite/pull/45): Rendered preview** — Toggles an in-app Markdown preview with `Ctrl+/`.
+- **[PR #48](https://github.com/omacom-io/omawrite/pull/48): Literal inline code** — Prevents Markdown styling inside code spans.
+- **[PR #50](https://github.com/omacom-io/omawrite/pull/50): Network-share saving** — Falls back safely when atomic saves are unavailable.
+- **[PR #52](https://github.com/omacom-io/omawrite/pull/52): CJK word counts** — Counts Han and kana writing accurately.
+- **[PR #55](https://github.com/omacom-io/omawrite/pull/55): Keyboard-scroll feedback** — Shows the scrollbar when caret navigation scrolls the document.
+- **[PR #57](https://github.com/omacom-io/omawrite/pull/57): Qt 6.4 compatibility** — Builds on Ubuntu 24.04 LTS.
+- **[PR #61](https://github.com/omacom-io/omawrite/pull/61): Dialog shortcuts** — Adds direct Cancel, Discard, and Save keys.
+- **[PR #5](https://github.com/omacom-io/omawrite/pull/5): Outdented headings** — Places heading markers in a gutter so heading text aligns with body copy.
+- **[PR #2](https://github.com/omacom-io/omawrite/pull/2): Code panel colors** — Uses a theme-aware background for inline and fenced code without replacing the newer parser.
 
 ### Standalone Exclusive Features
 - **Distro-Independent & Portal Theming:** Native desktop integration via standard XDG desktop portals or standalone config without requiring Omarchy D-Bus services.
@@ -73,6 +77,7 @@ background = "#1a1b26"
 foreground = "#c0caf5"
 accent     = "#7aa2f7"
 selection  = "#33467c"
+code_background = "#24283b"
 ```
 
 ---
@@ -86,6 +91,7 @@ selection  = "#33467c"
 | `Ctrl+O` | Open File |
 | `Ctrl+E` | Toggle Folder Sidebar |
 | `Ctrl+Shift+O` | Document Heading Navigation HUD |
+| `Ctrl+/` | Toggle Rendered Markdown Preview |
 | `Ctrl+Shift+T` | Toggle Focus Mode (Typewriter Centering) |
 | `Ctrl+Shift+C` | Toggle Task Checkbox (`- [ ]` / `- [x]`) |
 | `Ctrl+B` | Toggle Bold (`**text**`) |

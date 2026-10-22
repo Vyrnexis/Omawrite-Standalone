@@ -11,7 +11,8 @@ public:
     explicit MarkdownHighlighter(QTextDocument *document);
 
     void setDarkMode(bool darkMode);
-    void setColors(const QString &background, const QString &foreground, const QString &accent);
+    void setColors(const QString &background, const QString &foreground, const QString &accent,
+                   const QString &codeBackground);
     void setSearch(const QString &query, int currentMatchStart);
     void setFocusMode(bool enabled);
     void setFocusCursorPosition(int position);
@@ -34,10 +35,16 @@ public:
         Span destination{};
     };
 
+    struct HeadingMarkup {
+        int level = 0;
+        int prefixLength = 0;
+    };
+
     // Single source of truth for inline markdown spans: the highlighter uses it
     // to style content and hide markers, and the editor uses it (via
     // Backend::hiddenRangesAt) to skip the caret over the hidden markers.
     static QList<InlineMarkup> inlineMarkup(const QString &text);
+    static HeadingMarkup headingMarkup(const QString &text);
     static QString linkUrlAt(const QString &text, int position);
     static QString imageUrlAt(const QString &text, int position);
 
@@ -55,6 +62,7 @@ private:
     QString m_customBackground;
     QString m_customForeground;
     QString m_customAccent;
+    QString m_customCodeBackground;
     QTextCharFormat m_markerFormat;
     QTextCharFormat m_hiddenMarkerFormat;
     QTextCharFormat m_headingFormat;

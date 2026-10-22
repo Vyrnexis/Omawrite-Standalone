@@ -27,6 +27,8 @@ ApplicationWindow {
     // the app at the sizes it was designed around.
     readonly property real textScale: backend.textScale
     readonly property int editorFontPixelSize: scaledSize(backend.editorFontSize)
+    readonly property real headingCellWidth: writerFontMetrics.advanceWidth("#")
+    readonly property real headingGutterWidth: headingCellWidth * backend.headingGutterCells
     // Never wider than the Flickable's viewport, whatever the floor asks for:
     // a tiling compositor can resize the window below its minimum width.
     readonly property int editorWidth: Math.min(
@@ -43,6 +45,7 @@ ApplicationWindow {
     property url pendingOpenUrl
     property string pendingAction: ""
     property bool replaceOpen: false
+    property bool previewMode: false
     property int normalX: -1
     property int normalY: -1
     property int normalWidth: 1280
@@ -71,6 +74,16 @@ ApplicationWindow {
     function toggleSidebar() {
         setSidebarOpen(!sidebarOpen);
     }
+
+    function togglePreview() {
+        previewMode = !previewMode;
+        if (previewMode)
+            backend.renderPreview(preview.textDocument);
+        else
+            editor.forceActiveFocus();
+    }
+
+    onHeadingCellWidthChanged: backend.setHeadingCellWidth(headingCellWidth)
 
     onClosing: function(close) {
         if (closeConfirmed || !backend.modified)
@@ -226,6 +239,7 @@ ApplicationWindow {
         sequence: "Ctrl+H"
         context: Qt.ApplicationShortcut
         onActivated: {
+            previewMode = false;
             searchOpen = true;
             replaceOpen = true;
             searchField.forceActiveFocus();
@@ -267,6 +281,12 @@ ApplicationWindow {
         sequence: "Ctrl+?"
         context: Qt.ApplicationShortcut
         onActivated: shortcutsDialog.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+/"
+        context: Qt.ApplicationShortcut
+        onActivated: win.togglePreview()
     }
 
     Shortcut {
@@ -336,6 +356,7 @@ ApplicationWindow {
         sequence: "Ctrl+F"
         context: Qt.ApplicationShortcut
         onActivated: {
+            previewMode = false;
             searchOpen = true;
             searchField.forceActiveFocus();
             searchField.selectAll();
@@ -448,7 +469,7 @@ ApplicationWindow {
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+Shift+O  Headings\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+Shift+C  Toggle Task Checkbox\nCtrl+K  Link\nCtrl+P  Print\nCtrl+Shift+T  Focus Mode\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
+            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+Shift+O  Headings\nCtrl+/  Preview\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+Shift+C  Toggle Task Checkbox\nCtrl+K  Link\nCtrl+P  Print\nCtrl+Shift+T  Focus Mode\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
             lineHeight: 1.5
         }
     }
@@ -637,9 +658,11 @@ ApplicationWindow {
             anchors.leftMargin: 24
             anchors.rightMargin: 24
             clip: true
+            property bool settlingDocument: true
             contentWidth: width
-            contentHeight: Math.max(height, editor.y + editor.implicitHeight + 220)
-                + (backend.focusMode ? Math.round(height / 2) : 0)
+            contentHeight: Math.max(height, (win.previewMode ? preview : editor).y
+                                    + (win.previewMode ? preview : editor).implicitHeight + 220)
+                + (backend.focusMode && !win.previewMode ? Math.round(height / 2) : 0)
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {
                 policy: ScrollBar.AsNeeded
@@ -801,6 +824,8 @@ ApplicationWindow {
             function scrollTo(y) {
                 wheelScroll.stop();
                 contentY = snapToPixel(y);
+                if (!settlingDocument)
+                    scrollLinger.restart();
             }
 
             function scrollToHeadingPosition(pos) {
@@ -833,13 +858,15 @@ ApplicationWindow {
             TextEdit {
                 id: editor
                 objectName: "sourceEditor"
-                x: Math.round((editorFlick.width - width) / 2)
+                readonly property real bodyWidth: win.editorWidth
+                x: Math.round((editorFlick.width - bodyWidth) / 2 - win.headingGutterWidth)
                 y: backend.focusMode
                     ? Math.round(editorFlick.height / 2)
                     : Math.max(42, Math.round(win.height * 0.05))
-                width: win.editorWidth
+                width: bodyWidth + win.headingGutterWidth
                 height: Math.max(editorFlick.height - y - 96, implicitHeight + 20)
                 text: ""
+                visible: !win.previewMode
                 textFormat: TextEdit.RichText
                 wrapMode: TextEdit.Wrap
                 tabStopDistance: writerFontMetrics.advanceWidth("    ")
@@ -1302,6 +1329,8 @@ ApplicationWindow {
                     if (win.searchUpdating)
                         return;
                     var contentChanged = backend.editorTextChanged();
+                    if (win.previewMode && contentChanged)
+                        backend.renderPreview(preview.textDocument);
                     if (win.searchOpen && contentChanged)
                         win.updateSearch();
                 }
@@ -1318,9 +1347,30 @@ ApplicationWindow {
                 }
 
                 Component.onCompleted: {
+                    backend.setHeadingCellWidth(win.headingCellWidth);
                     backend.attachDocument(textDocument);
+                    editorFlick.settlingDocument = false;
                     forceActiveFocus();
                 }
+            }
+
+            TextEdit {
+                id: preview
+                objectName: "previewView"
+                x: Math.round((editorFlick.width - width) / 2)
+                y: editor.y
+                width: editor.bodyWidth
+                height: Math.max(editorFlick.height - y - 96, implicitHeight + 20)
+                visible: win.previewMode
+                readOnly: true
+                selectByMouse: true
+                textFormat: TextEdit.RichText
+                wrapMode: TextEdit.Wrap
+                color: win.textColor
+                font.family: backend.fontFamily
+                font.pixelSize: win.editorFontPixelSize
+                renderType: editor.renderType
+                onLinkActivated: function(link) { backend.openExternalUrl(link); }
             }
         }
 
@@ -1505,6 +1555,14 @@ ApplicationWindow {
                 iconColor: win.mutedColor
                 tooltip: "Files"
                 onClicked: win.toggleSidebar()
+            }
+
+            FooterIconButton {
+                objectName: "previewButton"
+                iconName: "preview"
+                iconColor: win.previewMode ? backend.themeAccent : win.mutedColor
+                tooltip: win.previewMode ? "Edit (Ctrl+/)" : "Preview (Ctrl+/)"
+                onClicked: win.togglePreview()
             }
 
             Label {

@@ -241,14 +241,32 @@ private slots:
         QScopedPointer<QObject> window(component.create());
         QVERIFY2(window, qPrintable(component.errorString()));
 
-        QVERIFY(window->findChild<QObject *>(QStringLiteral("sourceEditor")));
-        QVERIFY(!window->findChild<QObject *>(QStringLiteral("renderedPreview")));
-        QVERIFY(!window->findChild<QObject *>(QStringLiteral("modeToggle")));
+        QObject *sourceEditor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QObject *preview = window->findChild<QObject *>(QStringLiteral("previewView"));
+        QVERIFY(sourceEditor);
+        QVERIFY(preview);
+        QVERIFY(sourceEditor->property("visible").toBool());
+        QVERIFY(!preview->property("visible").toBool());
 
         QObject *saveButton = window->findChild<QObject *>(QStringLiteral("saveButton"));
         QObject *openButton = window->findChild<QObject *>(QStringLiteral("openButton"));
+        QObject *previewButton = window->findChild<QObject *>(QStringLiteral("previewButton"));
         QVERIFY(saveButton);
         QVERIFY(openButton);
+        QVERIFY(previewButton);
+
+        auto *sourceDocument = qobject_cast<QQuickTextDocument *>(
+            sourceEditor->property("textDocument").value<QObject *>());
+        QVERIFY(sourceDocument);
+        sourceDocument->textDocument()->setPlainText(QStringLiteral("# Preview\n\nBody"));
+        QVERIFY(QMetaObject::invokeMethod(previewButton, "clicked"));
+        QVERIFY(!sourceEditor->property("visible").toBool());
+        QVERIFY(preview->property("visible").toBool());
+        auto *previewDocument = qobject_cast<QQuickTextDocument *>(
+            preview->property("textDocument").value<QObject *>());
+        QVERIFY(previewDocument);
+        QCOMPARE(previewDocument->textDocument()->toPlainText(),
+                 QStringLiteral("Preview\nBody"));
 
         QSignalSpy saveDialogSpy(&backend, &Backend::saveDialogRequested);
         QVERIFY(QMetaObject::invokeMethod(saveButton, "clicked"));
@@ -496,6 +514,40 @@ private slots:
                  QStringLiteral("Visible"));
         QCOMPARE(headings.at(1).toMap().value(QStringLiteral("title")).toString(),
                  QStringLiteral("Also visible"));
+    }
+
+    // Verifies heading markers outdent while body blocks retain the full gutter.
+    void outdentsHeadingMarkersWithoutBreakingUndo() {
+        Backend backend;
+        QTextDocument document(QStringLiteral("# Heading\nBody"));
+        document.documentLayout();  // contentsChange only fires once a layout exists
+        backend.setHeadingCellWidth(10);
+        backend.attachTextDocument(&document);
+
+        QCOMPARE(document.indentWidth(), 10.0);
+        QCOMPARE(document.firstBlock().blockFormat().indent(), 5);
+        QCOMPARE(document.firstBlock().next().blockFormat().indent(), 7);
+
+        QTextCursor cursor(document.firstBlock().next());
+        cursor.beginEditBlock();  // the editor wraps typed input the same way
+        cursor.insertText(QStringLiteral("# "));
+        cursor.endEditBlock();
+        QVERIFY(backend.editorTextChanged());
+        QCOMPARE(document.firstBlock().next().blockFormat().indent(), 5);
+        document.undo();
+        QCOMPARE(document.toPlainText(), QStringLiteral("# Heading\nBody"));
+    }
+
+    // Verifies comment lines inside fenced code keep the body indent.
+    void doesNotOutdentHashLinesInsideFences() {
+        Backend backend;
+        QTextDocument document(QStringLiteral("```sh\n# comment\n```\n# Heading"));
+        document.documentLayout();
+        backend.setHeadingCellWidth(10);
+        backend.attachTextDocument(&document);
+
+        QCOMPARE(document.findBlockByNumber(1).blockFormat().indent(), 7);
+        QCOMPARE(document.findBlockByNumber(3).blockFormat().indent(), 5);
     }
 
     // Verifies the backend refuses to create an empty file without an editor document.

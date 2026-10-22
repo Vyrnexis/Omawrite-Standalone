@@ -69,6 +69,12 @@ Item {
                 context.lineTo(13.5, 5.5);
                 context.lineTo(13.5, 13);
                 context.closePath();
+            } else if (control.iconName === "preview") {
+                context.moveTo(1.5, 8);
+                context.bezierCurveTo(4.5, 3.5, 11.5, 3.5, 14.5, 8);
+                context.bezierCurveTo(11.5, 12.5, 4.5, 12.5, 1.5, 8);
+                context.moveTo(10.2, 8);
+                context.arc(8, 8, 2.2, 0, 2 * Math.PI);
             } else {
                 context.moveTo(2.5, 3.5);
                 context.lineTo(13.5, 3.5);

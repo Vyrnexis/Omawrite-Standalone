@@ -14,3 +14,5 @@ qrc_*.cpp
 Makefile
 omawrite
 moc_predefs.h
+/bin/tst_omawrite
+target_wrapper.sh

@@ -43,14 +43,15 @@ void MarkdownHighlighter::setDarkMode(bool darkMode) {
 }
 
 void MarkdownHighlighter::setColors(const QString &background, const QString &foreground,
-                                    const QString &accent) {
+                                    const QString &accent, const QString &codeBackground) {
     if (m_customBackground == background && m_customForeground == foreground
-            && m_customAccent == accent)
+            && m_customAccent == accent && m_customCodeBackground == codeBackground)
         return;
 
     m_customBackground = background;
     m_customForeground = foreground;
     m_customAccent = accent;
+    m_customCodeBackground = codeBackground;
     rebuildFormats();
     rehighlight();
 }
@@ -101,9 +102,9 @@ void MarkdownHighlighter::rebuildFormats() {
     const QColor link = !m_customAccent.isEmpty() ? QColor(m_customAccent)
         : (m_darkMode ? QColor(QStringLiteral("#5584aa")) : QColor(QStringLiteral("#2077b2")));
     const QColor quote = marker;
-    const QColor inlineCodeBackground = m_darkMode ? QColor(QStringLiteral("#1c1a1a"))
-                                                   : QColor(QStringLiteral("#f8f8f8"));
-    const QColor codeBackground = background;
+    const QColor codeBackground = !m_customCodeBackground.isEmpty()
+        ? QColor(m_customCodeBackground)
+        : background;
 
     m_markerFormat = QTextCharFormat();
     m_markerFormat.setForeground(marker);
@@ -145,7 +146,7 @@ void MarkdownHighlighter::rebuildFormats() {
 
     m_codeFormat = QTextCharFormat();
     m_codeFormat.setForeground(text);
-    m_codeFormat.setBackground(inlineCodeBackground);
+    m_codeFormat.setBackground(codeBackground);
 
     m_blockCodeFormat = QTextCharFormat();
     m_blockCodeFormat.setForeground(text);
@@ -289,12 +290,10 @@ void MarkdownHighlighter::highlightMarkers(const QString &text) {
 
     const QChar firstChar = text.at(first);
     if (first == 0 && firstChar == QLatin1Char('#')) {
-        static const QRegularExpression headingRe(QStringLiteral("^(#{1,6})(\\s+)(.*)$"));
-        const QRegularExpressionMatch heading = headingRe.match(text);
-        if (heading.hasMatch()) {
-            setFormat(0, heading.capturedLength(1) + heading.capturedLength(2),
-                      m_markerFormat);
-            setFormat(heading.capturedStart(3), heading.capturedLength(3),
+        const HeadingMarkup heading = headingMarkup(text);
+        if (heading.level > 0) {
+            setFormat(0, heading.prefixLength, m_markerFormat);
+            setFormat(heading.prefixLength, text.length() - heading.prefixLength,
                       m_headingFormat);
             return;
         }
@@ -325,6 +324,16 @@ void MarkdownHighlighter::highlightMarkers(const QString &text) {
         if (rule.hasMatch())
             setFormat(0, text.length(), m_markerFormat);
     }
+}
+
+// Parses a leading ATX heading marker and its required separator.
+MarkdownHighlighter::HeadingMarkup MarkdownHighlighter::headingMarkup(const QString &text) {
+    static const QRegularExpression headingRe(QStringLiteral("^(#{1,6})(\\s+)(.*)$"));
+    const QRegularExpressionMatch match = headingRe.match(text);
+    if (!match.hasMatch())
+        return {};
+    const int level = int(match.capturedLength(1));
+    return {level, level + int(match.capturedLength(2))};
 }
 
 void MarkdownHighlighter::highlightInline(const QString &text) {
