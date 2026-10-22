@@ -49,6 +49,7 @@ We have ported and integrated key upstream pull requests from [omacom-io/omawrit
 - **[PR #104](https://github.com/omacom-io/omawrite/pull/104): Toggle emphasis at the caret** — `Ctrl+B` / `Ctrl+I` / `Ctrl+Shift+X` with nothing selected step out of, back into, or remove the surrounding emphasis instead of stacking markers.
 - **[PR #124](https://github.com/omacom-io/omawrite/pull/124) / [#122](https://github.com/omacom-io/omawrite/pull/122): Faster, accent-insensitive search** — Plain letters find accented ones (`tara` finds `țară`), the matcher is shared with the highlighter, and typing in the find bar waits for a pause before searching.
 - **[PR #123](https://github.com/omacom-io/omawrite/pull/123): Responsive typing in large documents** — Word, character, and paragraph counts run on a worker thread.
+- **[PR #106](https://github.com/omacom-io/omawrite/pull/106): Removed files coming back** — A file that is removed and rewritten is one outside change, a removed file that returns is noticed, and Reload is hidden while the file is gone.
 - **[PR #125](https://github.com/omacom-io/omawrite/pull/125): Find bar and input methods** — `Ctrl+F` keeps working after closing the find bar with an input method.
 
 ### Standalone Exclusive Features

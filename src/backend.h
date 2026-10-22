@@ -178,6 +178,7 @@ private:
     QString recoveryPath() const;
     void setKnownFileContents(const QByteArray &contents, bool known);
     void watchCurrentFile();
+    void checkWatchedFile();
     void loadThemeConfig();
     void watchThemeConfig();
     void applyTextScale(qreal textScale);
@@ -209,6 +210,8 @@ private:
     bool m_wordCountAgain = false;
     QTimer m_recoveryTimer;
     QFileSystemWatcher m_fileWatcher;
+    QTimer m_fileCheckTimer;
+    bool m_fileMissing = false;
     QUrl m_folderUrl;
     QFileSystemWatcher m_folderWatcher;
     QPointer<QTextDocument> m_document;

@@ -605,6 +605,55 @@ private slots:
         QCOMPARE(externalChangeSpy.constFirst().at(1).toBool(), false);
     }
 
+    // Verifies remove-then-write replacement is one outside change, not a deletion.
+    void treatsAFileRemovedAndWrittenAgainAsChanged() {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("replaced.md"));
+
+        Backend backend;
+        QTextDocument document;
+        document.setPlainText(QStringLiteral("hello"));
+        backend.attachTextDocument(&document);
+        backend.saveAs(QUrl::fromLocalFile(path));
+
+        QSignalSpy externalChangeSpy(&backend, &Backend::externalChangeDetected);
+        QVERIFY(QFile::remove(path));
+        QTest::qWait(30);
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("theirs");
+        file.close();
+
+        QTRY_COMPARE(externalChangeSpy.count(), 1);
+        QCOMPARE(externalChangeSpy.constFirst().at(0).toBool(), false);
+    }
+
+    // Verifies a removed file that returns is reported as a change.
+    void noticesARemovedFileComingBack() {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("back.md"));
+
+        Backend backend;
+        QTextDocument document;
+        document.setPlainText(QStringLiteral("hello"));
+        backend.attachTextDocument(&document);
+        backend.saveAs(QUrl::fromLocalFile(path));
+
+        QSignalSpy externalChangeSpy(&backend, &Backend::externalChangeDetected);
+        QVERIFY(QFile::remove(path));
+        QTRY_COMPARE(externalChangeSpy.count(), 1);
+        QCOMPARE(externalChangeSpy.constFirst().at(0).toBool(), true);
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("theirs");
+        file.close();
+        QTRY_COMPARE(externalChangeSpy.count(), 2);
+        QCOMPARE(externalChangeSpy.at(1).at(0).toBool(), false);
+    }
+
     // Verifies persistent sidebar width is exposed to the next backend instance.
     void restoresSidebarWidth() {
         Backend first;

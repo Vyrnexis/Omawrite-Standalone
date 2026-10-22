@@ -160,35 +160,15 @@ Backend::Backend(QObject *parent) : QObject(parent) {
     m_recoveryTimer.setSingleShot(true);
     m_recoveryTimer.setInterval(750);
     connect(&m_recoveryTimer, &QTimer::timeout, this, &Backend::writeRecovery);
-    connect(&m_fileWatcher, &QFileSystemWatcher::fileChanged, this,
-            [this](const QString &path) {
-                if (path != m_fileUrl.toLocalFile())
-                    return;
-
-                const bool deleted = !QFileInfo::exists(path);
-                if (!deleted && m_hasKnownFileContents) {
-                    QFile file(path);
-                    if (file.open(QIODevice::ReadOnly)
-                            && file.readAll() == m_lastKnownFileContents) {
-                        // Atomic saves can replace the watched inode. Re-arm the
-                        // watcher, but do not report our own save as an outside edit.
-                        watchCurrentFile();
-                        return;
-                    }
-                }
-
-                if (!deleted) {
-                    m_hasKnownFileContents = false;
-                    m_lastKnownFileText.clear();
-                }
-                const bool locallyModified = m_modified;
-                if (deleted) {
-                    setKnownFileContents(QByteArray(), false);
-                    setModified(true);
-                    scheduleRecovery();
-                }
-                emit externalChangeDetected(deleted, locallyModified);
-            });
+    // Tools that replace a file by removing it and writing it again leave it
+    // briefly missing, so let the burst settle before deciding what happened.
+    m_fileCheckTimer.setSingleShot(true);
+    m_fileCheckTimer.setInterval(100);
+    connect(&m_fileCheckTimer, &QTimer::timeout, this, &Backend::checkWatchedFile);
+    connect(&m_fileWatcher, &QFileSystemWatcher::fileChanged, &m_fileCheckTimer,
+            qOverload<>(&QTimer::start));
+    connect(&m_fileWatcher, &QFileSystemWatcher::directoryChanged, &m_fileCheckTimer,
+            qOverload<>(&QTimer::start));
 
     connect(&m_folderWatcher, &QFileSystemWatcher::directoryChanged, this,
             [this]() { emit folderChanged(); });
@@ -953,7 +933,8 @@ void Backend::saveTo(const QUrl &url) {
 
     // QSaveFile commits by replacing the target. Stop watching the old inode
     // before that replacement so our own write is not classified as external.
-    const QStringList watched = m_fileWatcher.files();
+    m_fileCheckTimer.stop();
+    const QStringList watched = m_fileWatcher.files() + m_fileWatcher.directories();
     if (!watched.isEmpty())
         m_fileWatcher.removePaths(watched);
 
@@ -1047,12 +1028,54 @@ void Backend::clearRecovery() {
         QFile::remove(path);
 }
 
+// A missing file cannot be watched, so watch its folder instead to notice it
+// coming back.
 void Backend::watchCurrentFile() {
-    const QStringList watched = m_fileWatcher.files();
+    const QStringList watched = m_fileWatcher.files() + m_fileWatcher.directories();
     if (!watched.isEmpty())
         m_fileWatcher.removePaths(watched);
-    if (m_fileUrl.isLocalFile() && QFileInfo::exists(m_fileUrl.toLocalFile()))
-        m_fileWatcher.addPath(m_fileUrl.toLocalFile());
+    if (!m_fileUrl.isLocalFile())
+        return;
+    const QFileInfo info(m_fileUrl.toLocalFile());
+    m_fileMissing = !info.exists();
+    if (info.exists())
+        m_fileWatcher.addPath(info.filePath());
+    else if (info.dir().exists())
+        m_fileWatcher.addPath(info.dir().path());
+}
+
+void Backend::checkWatchedFile() {
+    const QString path = m_fileUrl.toLocalFile();
+    if (path.isEmpty())
+        return;
+
+    // Atomic saves replace the watched inode, which drops it from the
+    // watcher, so re-arm it either way.
+    const bool wasMissing = m_fileMissing;
+    watchCurrentFile();
+    const bool deleted = m_fileMissing;
+    // A file that was already missing has been reported, or was never there.
+    if (deleted && wasMissing)
+        return;
+
+    // Our own save is not an outside edit.
+    if (!deleted && m_hasKnownFileContents) {
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly) && file.readAll() == m_lastKnownFileContents)
+            return;
+    }
+
+    if (!deleted) {
+        m_hasKnownFileContents = false;
+        m_lastKnownFileText.clear();
+    }
+    const bool locallyModified = m_modified;
+    if (deleted) {
+        setKnownFileContents(QByteArray(), false);
+        setModified(true);
+        scheduleRecovery();
+    }
+    emit externalChangeDetected(deleted, locallyModified);
 }
 
 void Backend::applyFolder(const QString &path, bool remember) {

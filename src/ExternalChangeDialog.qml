@@ -26,6 +26,11 @@ Dialog {
     padding: 20
 
     onOpened: (deleted ? keepButton : reloadButton).forceActiveFocus()
+    // The file can vanish while the dialog is up; Enter must not reload it.
+    onDeletedChanged: {
+        if (deleted && opened)
+            keepButton.forceActiveFocus();
+    }
 
     background: Rectangle {
         color: root.darkMode ? "#1a1a1a" : "#ffffff"
@@ -70,6 +75,7 @@ Dialog {
 
             SquareDialogButton {
                 id: keepButton
+                objectName: "keepButton"
                 text: "Keep Mine"
                 darkMode: root.darkMode
                 textScale: root.textScale
@@ -88,7 +94,11 @@ Dialog {
 
             SquareDialogButton {
                 id: reloadButton
+                objectName: "reloadButton"
                 text: "Reload"
+                // There is nothing to reload from a removed file. Should it
+                // come back, the dialog turns into a change and this returns.
+                visible: !root.deleted
                 enabled: !root.deleted
                 primary: true
                 darkMode: root.darkMode
