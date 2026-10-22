@@ -1,4 +1,4 @@
-QT += core gui quick testlib
+QT += core gui concurrent quick testlib
 CONFIG += testcase c++17 release
 CONFIG -= debug
 TEMPLATE = app

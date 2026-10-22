@@ -1,6 +1,7 @@
 #include "backend.h"
 
 #include <QClipboard>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QColor>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -148,6 +149,14 @@ Backend::Backend(QObject *parent) : QObject(parent) {
     m_wordCountTimer.setSingleShot(true);
     m_wordCountTimer.setInterval(120);
     connect(&m_wordCountTimer, &QTimer::timeout, this, &Backend::refreshWordCount);
+    connect(&m_wordCountWatcher, &QFutureWatcher<TextStats>::finished, this, [this] {
+        if (!m_wordCountStale)
+            applyTextStats(m_wordCountWatcher.result());
+        if (m_wordCountAgain) {
+            m_wordCountAgain = false;
+            refreshWordCount();
+        }
+    });
     m_recoveryTimer.setSingleShot(true);
     m_recoveryTimer.setInterval(750);
     connect(&m_recoveryTimer, &QTimer::timeout, this, &Backend::writeRecovery);
@@ -896,6 +905,8 @@ void Backend::loadDocumentText(const QString &text) {
     QTextCursor cursor(m_document);
     cursor.setPosition(0);
     m_wordCountTimer.stop();
+    m_wordCountStale = true;
+    m_wordCountAgain = false;
     setWordCount(countWords(text), text);
 }
 
@@ -1241,9 +1252,10 @@ QString Backend::currentDocumentText() const {
 }
 
 int Backend::countWords(const QString &text) {
-    static const QRegularExpression cjkRe(
+    // One per thread, as loading a file counts here while a worker may too.
+    thread_local const QRegularExpression cjkRe(
         QStringLiteral("(?=[\\p{L}\\p{N}])[\\p{Han}\\p{Hiragana}\\p{Katakana}]"));
-    static const QRegularExpression wordRe(
+    thread_local const QRegularExpression wordRe(
         QStringLiteral("[\\p{L}\\p{N}]+(?:['-][\\p{L}\\p{N}]+)*"));
     int count = 0;
     QRegularExpressionMatchIterator cjkIt = cjkRe.globalMatch(text);
@@ -1311,36 +1323,54 @@ QString Backend::suggestedFileName(const QString &text) {
     return name;
 }
 
-void Backend::setWordCount(int words, const QString &text) {
-    const int characters = text.length();
-    
-    int paragraphs = 0;
+Backend::TextStats Backend::textStats(const QString &text) {
+    TextStats stats;
+    stats.words = countWords(text);
+    stats.characters = text.length();
+
     bool inParagraph = false;
     const QStringList lines = text.split(QLatin1Char('\n'));
     for (const QString &line : lines) {
         const bool hasText = !line.trimmed().isEmpty();
         if (hasText && !inParagraph)
-            ++paragraphs;
+            ++stats.paragraphs;
         inParagraph = hasText;
     }
+    return stats;
+}
 
-    if (m_wordCount == words && m_characterCount == characters && m_paragraphCount == paragraphs)
+void Backend::applyTextStats(const TextStats &stats) {
+    if (m_wordCount == stats.words && m_characterCount == stats.characters
+            && m_paragraphCount == stats.paragraphs)
         return;
 
-    m_wordCount = words;
-    m_characterCount = characters;
-    m_paragraphCount = paragraphs;
+    m_wordCount = stats.words;
+    m_characterCount = stats.characters;
+    m_paragraphCount = stats.paragraphs;
     emit wordCountChanged();
+}
+
+void Backend::setWordCount(int words, const QString &text) {
+    TextStats stats = textStats(text);
+    stats.words = words;
+    applyTextStats(stats);
 }
 
 void Backend::refreshWordCount() {
     const QString text = currentDocumentText();
-    setWordCount(countWords(text), text);
     if (m_hasKnownFileContents && text == m_lastKnownFileText) {
         setModified(false);
         setStatus(QStringLiteral("Saved"));
         clearRecovery();
     }
+
+    // One count at a time; edits made while it runs get one more after it.
+    if (m_wordCountWatcher.isRunning()) {
+        m_wordCountAgain = true;
+        return;
+    }
+    m_wordCountStale = false;
+    m_wordCountWatcher.setFuture(QtConcurrent::run(&Backend::textStats, text));
 }
 
 void Backend::scheduleWordCount() {

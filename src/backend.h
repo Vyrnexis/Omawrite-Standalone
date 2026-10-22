@@ -5,6 +5,7 @@
 #include <QByteArray>
 #include <QDir>
 #include <QFileSystemWatcher>
+#include <QFutureWatcher>
 #include <QString>
 #include <QTimer>
 #include <QUrl>
@@ -157,6 +158,13 @@ private:
     void applyFolder(const QString &path, bool remember);
     void watchCurrentFolder();
     QString currentDocumentText() const;
+    struct TextStats {
+        int words = 0;
+        int characters = 0;
+        int paragraphs = 0;
+    };
+    static TextStats textStats(const QString &text);
+    void applyTextStats(const TextStats &stats);
     void setWordCount(int words, const QString &text);
     void refreshWordCount();
     void scheduleWordCount();
@@ -194,6 +202,11 @@ private:
     int m_lastChangeAdded = 0;
     qreal m_headingCellWidth = 1.0;
     QTimer m_wordCountTimer;
+    // Counting a large document stalls typing, so counts run on a worker
+    // thread. A load outdates the count in flight, and its result is dropped.
+    QFutureWatcher<TextStats> m_wordCountWatcher;
+    bool m_wordCountStale = false;
+    bool m_wordCountAgain = false;
     QTimer m_recoveryTimer;
     QFileSystemWatcher m_fileWatcher;
     QUrl m_folderUrl;
