@@ -1,5 +1,7 @@
 #include <QtTest>
+#include <QClipboard>
 #include <QFont>
+#include <QMimeData>
 #include <QColor>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -59,6 +61,42 @@ private slots:
         QCOMPARE(backend.cursorPositionStep(5, 1), 7);   // e + combining acute
         QCOMPARE(backend.cursorPositionStep(7, -1), 5);
         QCOMPARE(backend.cursorPositionStep(0, -1), 0);
+    }
+
+    // Verifies Copy as HTML publishes rendered HTML without fixed fonts or margins.
+    void copiesRenderedHtml() {
+        Backend backend;
+        QTextDocument document(QStringLiteral("# Title\n\nFirst **bold**.\n\nSecond."));
+        backend.attachTextDocument(&document);
+        backend.copyAsHtml();
+
+        const QMimeData *mimeData = QGuiApplication::clipboard()->mimeData();
+        QVERIFY(mimeData);
+        QVERIFY(mimeData->hasHtml());
+        const QString html = mimeData->html();
+        QVERIFY(html.contains(QStringLiteral("<h1>")));
+        QVERIFY(html.contains(QStringLiteral("<p>First ")));
+        QVERIFY(!html.contains(QStringLiteral("font-family")));
+        QVERIFY(!html.contains(QStringLiteral("margin")));
+    }
+
+    // Verifies emphasis spans are found for caret-only toggles.
+    void findsEmphasisSpanAtCaret() {
+        Backend backend;
+        QTextDocument document(QStringLiteral("a **hello** b\n***x***"));
+        backend.attachTextDocument(&document);
+
+        const QVariantMap span = backend.emphasisSpanAt(6, QStringLiteral("**"));
+        QCOMPARE(span.value(QStringLiteral("start")).toInt(), 2);
+        QCOMPARE(span.value(QStringLiteral("end")).toInt(), 11);
+        QCOMPARE(span.value(QStringLiteral("contentStart")).toInt(), 4);
+        QCOMPARE(span.value(QStringLiteral("textEnd")).toInt(), 9);
+        QVERIFY(backend.emphasisSpanAt(0, QStringLiteral("**")).isEmpty());
+        QVERIFY(backend.emphasisSpanAt(6, QStringLiteral("(")).isEmpty());
+        // Bold italic: the italic closer is not part of the bold's visible text.
+        const QVariantMap nested = backend.emphasisSpanAt(18, QStringLiteral("**"));
+        QVERIFY(nested.value(QStringLiteral("textEnd")).toInt()
+                < nested.value(QStringLiteral("end")).toInt());
     }
 
     // Verifies printing converts the editor's pixel size to points.
@@ -387,6 +425,20 @@ private slots:
         editor->setProperty("cursorPosition", 7);
         QTest::keyClick(window, Qt::Key_Tab);
         QCOMPARE(plainText(), QStringLiteral("```\n- a\t\n```"));
+
+        // Ctrl+B with nothing selected steps out of bold instead of stacking markers.
+        quickDocument->textDocument()->setPlainText(QStringLiteral("a "));
+        editor->setProperty("cursorPosition", 2);
+        QTest::keyClick(window, Qt::Key_B, Qt::ControlModifier);
+        QTest::keyClick(window, Qt::Key_H);
+        QTest::keyClick(window, Qt::Key_I);
+        QTest::keyClick(window, Qt::Key_B, Qt::ControlModifier);
+        QTest::keyClick(window, Qt::Key_X);
+        QCOMPARE(plainText(), QStringLiteral("a **hi**x"));
+        quickDocument->textDocument()->setPlainText(QStringLiteral("a **hello** b"));
+        editor->setProperty("cursorPosition", 6);
+        QTest::keyClick(window, Qt::Key_B, Qt::ControlModifier);
+        QCOMPARE(plainText(), QStringLiteral("a hello b"));
 
         QCOMPARE(backend.editorFontSize(), 20);
         QTest::keyClick(window, Qt::Key_Equal, Qt::ControlModifier);

@@ -14,9 +14,24 @@ function insertableText(text) {
         + "</span>";
 }
 
-function toggleWrap(editor, before, after) {
+// With nothing selected, `span` describes the emphasis around the caret: at the
+// end of its text the caret steps past the closing marker (and back in on a
+// second press), anywhere else inside it the emphasis comes off.
+function toggleWrap(editor, before, after, span) {
     var start = Math.min(editor.selectionStart, editor.selectionEnd);
     var end = Math.max(editor.selectionStart, editor.selectionEnd);
+    if (start === end && span && span.start !== undefined) {
+        if (start === span.end) {
+            editor.cursorPosition = span.textEnd;
+        } else if (start >= span.textEnd) {
+            editor.cursorPosition = span.end;
+        } else {
+            var content = editor.getText(span.contentStart, span.contentEnd);
+            var caret = Math.max(0, start - span.contentStart);
+            replaceRange(editor, span.start, span.end, content, caret, caret);
+        }
+        return;
+    }
     var selected = editor.getText(start, end);
 
     // Selection includes the markers: strip them.

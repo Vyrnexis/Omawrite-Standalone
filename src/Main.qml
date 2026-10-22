@@ -333,6 +333,12 @@ ApplicationWindow {
     }
 
     Shortcut {
+        sequence: "Ctrl+Shift+H"
+        context: Qt.ApplicationShortcut
+        onActivated: backend.copyAsHtml()
+    }
+
+    Shortcut {
         sequence: "Ctrl+P"
         context: Qt.ApplicationShortcut
         onActivated: backend.printDocument()
@@ -473,7 +479,7 @@ ApplicationWindow {
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+Shift+O  Headings\nCtrl+/  Preview\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+Shift+C  Toggle Task Checkbox\nCtrl+K  Link\nCtrl+P  Print\nCtrl+Shift+T  Focus Mode\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
+            text: "Ctrl+Z  Undo\nCtrl+Shift+Z / Ctrl+Y  Redo\nCtrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+Shift+O  Headings\nCtrl+/  Preview\nCtrl+N  New Window\nCtrl+Q  Quit\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+Shift+C  Toggle Task Checkbox\nCtrl+K  Link\nCtrl+P  Print\nCtrl+Shift+H  Copy as HTML\nCtrl+Shift+T  Focus Mode\nCtrl++ / Ctrl+-  Zoom\nCtrl+0  Reset Zoom\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
             lineHeight: 1.5
         }
     }
@@ -908,7 +914,8 @@ ApplicationWindow {
 
                 function wrapSelection(before, after) {
                     forceActiveFocus();
-                    EditorMutations.toggleWrap(editor, before, after);
+                    EditorMutations.toggleWrap(editor, before, after,
+                                               backend.emphasisSpanAt(cursorPosition, before));
                 }
 
                 function insertLink() {

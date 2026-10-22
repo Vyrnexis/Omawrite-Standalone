@@ -105,10 +105,12 @@ public:
     Q_INVOKABLE void reloadFromDisk();
     Q_INVOKABLE void keepExternalVersion();
     Q_INVOKABLE void printDocument();
+    Q_INVOKABLE void copyAsHtml();
     Q_INVOKABLE void newWindow();
     Q_INVOKABLE QString clipboardUrl() const;
     Q_INVOKABLE QString clipboardText() const;
     Q_INVOKABLE bool editorTextChanged();
+    Q_INVOKABLE QVariantMap emphasisSpanAt(int position, const QString &marker) const;
     Q_INVOKABLE int cursorPositionStep(int position, int direction) const;
     Q_INVOKABLE QVariantList hiddenRangesAt(int position) const;
     Q_INVOKABLE QString linkUrlAt(int position) const;

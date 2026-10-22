@@ -45,6 +45,8 @@ We have ported and integrated key upstream pull requests from [omacom-io/omawrit
 - **[PR #89](https://github.com/omacom-io/omawrite/pull/89): Stray asterisks** — `2 * 3 * 4` and `* bullet *emphasis*` no longer pair stray `*` as italics.
 - **[PR #67](https://github.com/omacom-io/omawrite/pull/67): Print in points** — Printed text matches the editor's size instead of using device dots.
 - **[PR #88](https://github.com/omacom-io/omawrite/pull/88): Grapheme-aware caret** — Arrow keys step over whole emoji and combining sequences instead of splitting them.
+- **[PR #76](https://github.com/omacom-io/omawrite/pull/76): Copy as HTML** — `Ctrl+Shift+H` copies the rendered document as HTML with a plain-text fallback.
+- **[PR #104](https://github.com/omacom-io/omawrite/pull/104): Toggle emphasis at the caret** — `Ctrl+B` / `Ctrl+I` / `Ctrl+Shift+X` with nothing selected step out of, back into, or remove the surrounding emphasis instead of stacking markers.
 - **[PR #125](https://github.com/omacom-io/omawrite/pull/125): Find bar and input methods** — `Ctrl+F` keeps working after closing the find bar with an input method.
 
 ### Standalone Exclusive Features
@@ -109,6 +111,7 @@ code_background = "#24283b"
 | `Ctrl+0` | Reset Zoom (100%) |
 | `F11` / `Super+F` | Toggle Fullscreen |
 | `Ctrl+N` | Open New Window |
+| `Ctrl+Shift+H` | Copy rendered document as HTML |
 | `Ctrl+P` | Print Document |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / Redo |
 | `Ctrl+?` | Display Keyboard Shortcut HUD |

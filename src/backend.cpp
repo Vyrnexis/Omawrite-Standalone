@@ -475,6 +475,24 @@ void Backend::printDocument() {
     }
 }
 
+void Backend::copyAsHtml() {
+    QTextDocument rendered;
+    rendered.setMarkdown(currentDocumentText());
+
+    // Drop Qt's fixed fonts and margins from the body and blocks, so the pasted
+    // text takes on the destination's own typeface and paragraph spacing.
+    QString html = rendered.toHtml();
+    static const QRegularExpression blockStyle(
+        QStringLiteral("<(body|p|h[1-6]|ul|ol|li)\\s+style=\"[^\"]*\""));
+    html.replace(blockStyle, QStringLiteral("<\\1"));
+
+    auto *mimeData = new QMimeData;
+    mimeData->setHtml(html);
+    mimeData->setText(rendered.toPlainText());
+    QGuiApplication::clipboard()->setMimeData(mimeData);
+    setStatus(QStringLiteral("Copied as HTML."));
+}
+
 void Backend::newWindow() {
     const bool started = QProcess::startDetached(QCoreApplication::applicationFilePath(),
                                                  QStringList());
@@ -536,6 +554,60 @@ bool Backend::editorTextChanged() {
         scheduleRecovery();
     }
     return true;
+}
+
+// The emphasis span of the marker's kind that the caret sits in or against,
+// in document positions, so a toggle with nothing selected can act on it.
+QVariantMap Backend::emphasisSpanAt(int position, const QString &marker) const {
+    using Kind = MarkdownHighlighter::InlineKind;
+    Kind kind;
+    if (marker == QStringLiteral("**"))
+        kind = Kind::Bold;
+    else if (marker == QStringLiteral("~~"))
+        kind = Kind::Strikethrough;
+    else if (marker == QStringLiteral("*"))
+        kind = Kind::Italic;
+    else
+        return {};
+    if (!m_document)
+        return {};
+
+    const QTextBlock block =
+        m_document->findBlock(qBound(0, position, m_document->characterCount() - 1));
+    if (!block.isValid() || block.userState() > 0 || block.previous().userState() > 0)
+        return {};
+
+    const int offset = position - block.position();
+    const QList<MarkdownHighlighter::InlineMarkup> markup =
+        MarkdownHighlighter::inlineMarkup(block.text());
+    for (const auto &item : markup) {
+        const int start = item.markers[0].start;
+        const int end = item.markers[1].start + item.markers[1].length;
+        if (item.kind != kind || offset < start || offset > end)
+            continue;
+        // The visible text ends before the chain of nested emphasis closing
+        // with it, as the italic "*" inside "***word***".
+        const int contentEnd = item.content.start + item.content.length;
+        int textEnd = contentEnd;
+        for (bool moved = true; moved;) {
+            moved = false;
+            for (const auto &nested : markup) {
+                const auto &closing = nested.markers[1];
+                if (closing.start >= item.content.start && closing.length > 0
+                        && closing.start + closing.length == textEnd) {
+                    textEnd = closing.start;
+                    moved = true;
+                }
+            }
+        }
+        const int base = block.position();
+        return {{QStringLiteral("start"), base + start},
+                {QStringLiteral("end"), base + end},
+                {QStringLiteral("contentStart"), base + item.content.start},
+                {QStringLiteral("contentEnd"), base + contentEnd},
+                {QStringLiteral("textEnd"), base + textEnd}};
+    }
+    return {};
 }
 
 // Steps one grapheme cluster from a caret position, so emoji and combining
